@@ -78,6 +78,8 @@ void __loop(int proxy_fd)
 			continue;
 		}
 
+		printf("Server Socket Found...");
+
 		if (connect(server_fd, (struct sockaddr *) &remote_addr, 
 			sizeof(struct sockaddr_in)) <0) {
 			if (errno != EINPROGRESS) {
@@ -88,10 +90,68 @@ void __loop(int proxy_fd)
 			}		
 		}
 
+		printf("Server Connected...");
+
+
+		fcntl(client_fd, F_SETFL, O_NONBLOCK);
+		fcntl(server_fd, F_SETFL, O_NONBLOCK);
+
+		start_proxy(client_fd, server_fd);
 		close(client_fd);
 		close(server_fd);
 	}
 }
+
+void start_proxy(int client_fd, int server_fd){
+	printf("Staring Proxy Forwarding...")
+	int exitflag = 0; 
+	void *buf = malloc(BUF_SIZE);
+	int size;
+	while(1){
+		if(exitcond == 1)
+			break;
+
+		if(size = recv(client_fd, buf, BUF_SIZE, 0)){
+			if(size < -1){
+				fprintf(stderr, "Receiving error from Client-Side%s\n", strerror(errno));
+				close(client_fd);
+				return;
+			}
+			if(size == -1){
+				// do nothing
+			}
+			else{
+				if(send(server_fd, buf, size, 0) < 0){
+					fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
+					close(client_fd);
+					return;
+				}
+			}
+		}
+
+		if(size = recv(server_fd, buf, BUF_SIZE, 0)){
+			if(size < -1){
+				fprintf(stderr, "Receiving error from Server-Side%s\n", strerror(errno));
+				close(client_fd);
+				return;
+			}
+			if(size == -1){
+				// do nothing
+			}
+			else{
+				if(send(client_fd, buf, size, 0) < 0){
+					fprintf(stderr, "Sending error from Server-Side-Side%s\n", strerror(errno));
+					close(client_fd);
+					return;
+				}
+			}
+		}
+
+
+	}
+}
+
+
 
 int main(int argc, char **argv)
 {
