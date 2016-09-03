@@ -30,6 +30,25 @@
 #define MAX_THREAD_NUM	4
 #define BUF_SIZE 4096
 
+
+/* sendall taken fro Beej's Guide to Network Programming to handle partial sends
+	... Modified partially for syntatic clarity and functionality*/
+int sendall(int destination_fd, char *buf, int *len)
+{
+	int total = 0; // how many bytes we've sent
+	int bytesleft = *len; // how many we have left to send
+	int n;
+	while(total < *len) {
+		n = send(destination_fd, buf+total, bytesleft, 0);
+		if (n == -1) { break; }
+		total += n;
+		bytesleft -= n;
+	}
+	*len = total; // return number actually sent here
+	return n==-1?-1:0; // return -1 on failure, 0 on success
+}
+I
+
 int start_proxy(int client_fd, int server_fd){
 	printf("Staring Proxy Forwarding...");
 	int exitflag = 0; 
@@ -58,7 +77,7 @@ int forward(int origin_fd, int destination_fd, void *buf){
 				// do nothing
 			}
 			else{
-				if(send(destination_fd, buf, size, 0) < 0){
+				if(sendall(destination_fd, buf, size) < 0){
 					fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
 					return 0;
 				}

@@ -40,7 +40,8 @@ struct sockaddr_in remote_addr; /* The address of the target server */
 
 #define BUF_SIZE 4096
 
-
+struct buffer{
+};
 
 void __loop(int proxy_fd)
 {
