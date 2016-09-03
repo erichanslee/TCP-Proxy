@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "list.h"
+#include "tcp-proxy.h"
 
 #define MAX_LISTEN_BACKLOG 5
 #define MAX_ADDR_NAME	32
@@ -39,54 +40,7 @@ struct sockaddr_in remote_addr; /* The address of the target server */
 
 #define BUF_SIZE 4096
 
-int start_proxy(int client_fd, int server_fd){
-	printf("Staring Proxy Forwarding...");
-	int exitflag = 0; 
-	void *buf = malloc(BUF_SIZE);
-	int size;
-	while(1){
-		if(exitflag == 1)
-			break;
 
-		if(size = recv(client_fd, buf, BUF_SIZE, 0)){
-			if(size < -1){
-				fprintf(stderr, "Receiving error from Client-Side%s\n", strerror(errno));
-				close(client_fd);
-				return 0;
-			}
-			if(size == -1){
-				// do nothing
-			}
-			else{
-				if(send(server_fd, buf, size, 0) < 0){
-					fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
-					close(client_fd);
-					return 0;
-				}
-			}
-		}
-
-		if(size = recv(server_fd, buf, BUF_SIZE, 0)){
-			if(size < -1){
-				fprintf(stderr, "Receiving error from Server-Side%s\n", strerror(errno));
-				close(client_fd);
-				return 0;
-			}
-			if(size == -1){
-				// do nothing
-			}
-			else{
-				if(send(client_fd, buf, size, 0) < 0){
-					fprintf(stderr, "Sending error from Server-Side-Side%s\n", strerror(errno));
-					close(client_fd);
-					return 0;
-				}
-			}
-		}
-
-
-	}
-}
 
 void __loop(int proxy_fd)
 {
@@ -147,6 +101,7 @@ void __loop(int proxy_fd)
 		fcntl(client_fd, F_SETFL, O_NONBLOCK);
 		fcntl(server_fd, F_SETFL, O_NONBLOCK);
 
+		// see header tcp-proxy.h
 		start_proxy(client_fd, server_fd);
 		close(client_fd);
 		close(server_fd);
