@@ -78,7 +78,7 @@ int start_proxy(int client_fd, int server_fd){
 	int exitflag = 0; 
 	void *client_buf = malloc(BUF_SIZE);
 	void *dest_buf = malloc(BUF_SIZE);
-	int size;
+	int size, maxfd;
 
 
 
@@ -87,10 +87,10 @@ int start_proxy(int client_fd, int server_fd){
 	FD_SET(client_fd, &readfds);
 	FD_SET(server_fd, &readfds);
 	struct timeval tv;
-	tv.tv_set = 5;
-	tv.tv_uset = 0;
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
 	maxfd = max(client_fd, server_fd) + 1;
-	
+
 	while(1){
 		if(exitflag == 1)
 			break;
@@ -104,8 +104,8 @@ int start_proxy(int client_fd, int server_fd){
 			forward(client_fd, server_fd, client_buf);
 		}
 		
-		if(FD_ISSET(server_fd_fd, &readfds)){
-			forward(server_fd_fd, server_fd, client_buf);
+		if(FD_ISSET(server_fd, &readfds)){
+			forward(server_fd, server_fd, client_buf);
 		}
 		
 		
