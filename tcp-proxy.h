@@ -38,7 +38,7 @@ int sendall(int destination_fd, char *buf, int len)
 	int total = 0; // how many bytes we've sent
 	int bytesleft = len; // how many we have left to send
 	int n;
-	while(total < *len) {
+	while(total < len) {
 		n = send(destination_fd, buf+total, bytesleft, 0);
 		if (n == -1) { break; }
 		total += n;
@@ -46,7 +46,28 @@ int sendall(int destination_fd, char *buf, int len)
 	}
 	return n==-1?-1:0; // return -1 on failure, 0 on success
 }
-I
+
+
+
+int forward(int origin_fd, int destination_fd, void *buf){
+	int size;
+	if(size = recv(origin_fd, buf, BUF_SIZE, 0)){
+		if(size < -1){
+			fprintf(stderr, "Receiving error from Client-Side%s\n", strerror(errno));
+			close(origin_fd);
+			return 0;
+		}
+		if(size == -1){
+			// do nothing
+		}
+		else{
+			if(sendall(destination_fd, buf, size) < 0){
+				fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
+				return 0;
+			}
+		}
+	}
+}
 
 int start_proxy(int client_fd, int server_fd){
 	printf("Staring Proxy Forwarding...");
@@ -62,24 +83,4 @@ int start_proxy(int client_fd, int server_fd){
 
 		
 	}
-}
-
-int forward(int origin_fd, int destination_fd, void *buf){
-	int size;
-		if(size = recv(origin_fd, buf, BUF_SIZE, 0)){
-			if(size < -1){
-				fprintf(stderr, "Receiving error from Client-Side%s\n", strerror(errno));
-				close(origin_fd);
-				return 0;
-			}
-			if(size == -1){
-				// do nothing
-			}
-			else{
-				if(sendall(destination_fd, buf, size) < 0){
-					fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
-					return 0;
-				}
-			}
-		}
 }
