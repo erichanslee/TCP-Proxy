@@ -33,10 +33,10 @@
 
 /* sendall taken fro Beej's Guide to Network Programming to handle partial sends
 	... Modified partially for syntatic clarity and functionality*/
-int sendall(int destination_fd, char *buf, int *len)
+int sendall(int destination_fd, char *buf, int len)
 {
 	int total = 0; // how many bytes we've sent
-	int bytesleft = *len; // how many we have left to send
+	int bytesleft = len; // how many we have left to send
 	int n;
 	while(total < *len) {
 		n = send(destination_fd, buf+total, bytesleft, 0);
@@ -44,7 +44,6 @@ int sendall(int destination_fd, char *buf, int *len)
 		total += n;
 		bytesleft -= n;
 	}
-	*len = total; // return number actually sent here
 	return n==-1?-1:0; // return -1 on failure, 0 on success
 }
 I
