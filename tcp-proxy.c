@@ -98,10 +98,11 @@ void __loop(int proxy_fd)
 
 		printf("Server Connected...\n");
 
-
+		/*
 		fcntl(client_fd, F_SETFL, O_NONBLOCK);
 		fcntl(server_fd, F_SETFL, O_NONBLOCK);
-
+		*/
+		
 		// see header tcp-proxy.h
 		start_proxy(client_fd, server_fd);
 		close(client_fd);

@@ -16,6 +16,10 @@
 #include <unistd.h>
 #include "list.h"
 
+#ifndef max
+    #define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 #define MAX_LISTEN_BACKLOG 5
 #define MAX_ADDR_NAME	32
 #define ONE_K	1024
@@ -31,12 +35,12 @@
 #define BUF_SIZE 4096
 
 
-/* sendall taken fro Beej's Guide to Network Programming to handle partial sends
-	... Modified partially for syntatic clarity and functionality*/
+/* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
+	... Changed for syntatic clarity and functionality*/
 int sendall(int destination_fd, char *buf, int len)
 {
-	int total = 0; // how many bytes we've sent
-	int bytesleft = len; // how many we have left to send
+	int total = 0; 
+	int bytesleft = len; 
 	int n;
 	while(total < len) {
 		n = send(destination_fd, buf+total, bytesleft, 0);
@@ -44,7 +48,7 @@ int sendall(int destination_fd, char *buf, int len)
 		total += n;
 		bytesleft -= n;
 	}
-	return n==-1?-1:0; // return -1 on failure, 0 on success
+	return n==-1?-1:0;
 }
 
 
@@ -53,7 +57,7 @@ int forward(int origin_fd, int destination_fd, void *buf){
 	int size;
 	if(size = recv(origin_fd, buf, BUF_SIZE, 0)){
 		if(size < -1){
-			fprintf(stderr, "Receiving error from Client-Side%s\n", strerror(errno));
+			fprintf(stderr, "Receiving error %s\n", strerror(errno));
 			close(origin_fd);
 			return 0;
 		}
@@ -62,7 +66,7 @@ int forward(int origin_fd, int destination_fd, void *buf){
 		}
 		else{
 			if(sendall(destination_fd, buf, size) < 0){
-				fprintf(stderr, "Sending error from Client-Side%s\n", strerror(errno));
+				fprintf(stderr, "Sending error %s\n", strerror(errno));
 				return 0;
 			}
 		}
@@ -72,15 +76,38 @@ int forward(int origin_fd, int destination_fd, void *buf){
 int start_proxy(int client_fd, int server_fd){
 	printf("Staring Proxy Forwarding...");
 	int exitflag = 0; 
-	void *buf = malloc(BUF_SIZE);
+	void *client_buf = malloc(BUF_SIZE);
+	void *dest_buf = malloc(BUF_SIZE);
 	int size;
+
+
+
+	fd_set readfds;
+	FD_ZERO(&readfds);
+	FD_SET(client_fd, &readfds);
+	FD_SET(server_fd, &readfds);
+	struct timeval tv;
+	tv.tv_set = 5;
+	tv.tv_uset = 0;
+	maxfd = max(client_fd, server_fd) + 1;
+	
 	while(1){
 		if(exitflag == 1)
 			break;
-		//todo: need to buffer
-		forward(client_fd, server_fd, buf);
-		forward(server_fd, client_fd, buf);
-
+			//todo: need to buffer
+		FD_ZERO(&readfds);
+		FD_SET(client_fd, &readfds);
+		FD_SET(server_fd, &readfds);
+		select(maxfd, &readfds, NULL, NULL, &tv);
+		
+		if(FD_ISSET(client_fd, &readfds)){
+			forward(client_fd, server_fd, client_buf);
+		}
+		
+		if(FD_ISSET(server_fd_fd, &readfds)){
+			forward(server_fd_fd, server_fd, client_buf);
+		}
+		
 		
 	}
 }
