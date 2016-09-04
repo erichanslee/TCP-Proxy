@@ -83,9 +83,6 @@ int start_proxy(int client_fd, int server_fd){
 
 
 	fd_set readfds;
-	FD_ZERO(&readfds);
-	FD_SET(client_fd, &readfds);
-	FD_SET(server_fd, &readfds);
 	struct timeval tv;
 	tv.tv_sec = 5;
 	tv.tv_usec = 0;
@@ -101,10 +98,12 @@ int start_proxy(int client_fd, int server_fd){
 		select(maxfd, &readfds, NULL, NULL, &tv);
 		
 		if(FD_ISSET(client_fd, &readfds)){
+			printf("fowarding...\n!");
 			forward(client_fd, server_fd, client_buf);
 		}
 		
 		if(FD_ISSET(server_fd, &readfds)){
+			printf("fowarding...\n!");
 			forward(server_fd, server_fd, client_buf);
 		}
 		
