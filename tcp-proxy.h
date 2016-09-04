@@ -104,7 +104,7 @@ int start_proxy(int client_fd, int server_fd){
 		
 		if(FD_ISSET(server_fd, &readfds)){
 			printf("fowarding...\n!");
-			forward(server_fd, server_fd, client_buf);
+			forward(server_fd, client_fd, server_buf);
 		}
 		
 		
