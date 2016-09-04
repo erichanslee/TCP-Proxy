@@ -77,7 +77,7 @@ int start_proxy(int client_fd, int server_fd){
 	printf("Staring Proxy Forwarding...");
 	int exitflag = 0; 
 	void *client_buf = malloc(BUF_SIZE);
-	void *dest_buf = malloc(BUF_SIZE);
+	void *server_buf = malloc(BUF_SIZE);
 	int size, maxfd;
 
 
