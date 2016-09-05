@@ -58,27 +58,24 @@ void __loop(int proxy_fd)
 	struct worker_thread *thread;
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
-	int fdarray[MAX_CONN_HIGH_WATERMARK*2];
+	struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
 	int num_connections=0;
 	int printflag = 1;
 
 	while(1) {
 		// Notify client that no new connections are being accepted
-		if(num_connections == MAX_CONN_HIGH_WATERMARK*2 && printflag == 1 ){
+		if(num_connections == MAX_CONN_HIGH_WATERMARK && printflag == 1 ){
 			printf("Reached Max Connections! Not accepting any new ones\n");
 			printflag = 0;
-			return;
 		}
 
 		//Accept Client-Side 
 		memset(&client_addr, 0, sizeof(struct sockaddr_in));
 		addr_size = sizeof(client_addr);
-		if(num_connections < MAX_CONN_HIGH_WATERMARK*2){
+		if(num_connections < MAX_CONN_HIGH_WATERMARK){
 
+			// Connect to client
 			client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr, &addr_size);
-			fdarray[num_connections] = client_fd;
-			num_connections++;
-			printf("Client Socket Found. FD = %d\n", client_fd);
 			if(client_fd == -1) {
 				fprintf(stderr, "accept error %s\n", strerror(errno));
 				continue;
@@ -98,16 +95,20 @@ void __loop(int proxy_fd)
 					client_hname, ntohs(client_addr.sin_port),
 					server_hname, ntohs(remote_addr.sin_port));
 
-			// Connect to the server
+			// Connect to server
 			if ((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
 				fprintf(stderr, "socket error %s\n", strerror(errno));
 				close(server_fd);
 				continue;
 			}
-			fdarray[num_connections] = server_fd;
+
+			// Set struct data
+			fdarray[num_connections].client_fd = client_fd;
+			fdarray[num_connections].server_fd = server_fd;
+			printf("New Connection Set up from %d to %d\n", fdarray[num_connections].client_fd, fdarray[num_connections].server_fd);
 			num_connections++;
-			printf("Server Socket Found. FD = %d\n", server_fd);
 			
+
 
 			if (connect(server_fd, (struct sockaddr *) &remote_addr, 
 				sizeof(struct sockaddr_in)) <0) {
