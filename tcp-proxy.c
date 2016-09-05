@@ -43,6 +43,11 @@ struct sockaddr_in remote_addr; /* The address of the target server */
 struct buffer{
 };
 
+struct connection{
+	int client_fd;
+	int server_fd;
+};
+
 void __loop(int proxy_fd)
 {
 	struct sockaddr_in client_addr;
@@ -54,56 +59,68 @@ void __loop(int proxy_fd)
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
 	int fdarray[MAX_CONN_HIGH_WATERMARK*2];
-	int num_fds=0;
-
+	int num_connections=0;
+	int printflag = 1;
 
 	while(1) {
+		// Notify client that no new connections are being accepted
+		if(num_connections == MAX_CONN_HIGH_WATERMARK*2 && printflag == 1 ){
+			printf("Reached Max Connections! Not accepting any new ones\n");
+			printflag = 0;
+			return;
+		}
 
-
+		//Accept Client-Side 
 		memset(&client_addr, 0, sizeof(struct sockaddr_in));
 		addr_size = sizeof(client_addr);
-		client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr,
-					&addr_size);
-		if(client_fd == -1) {
-			fprintf(stderr, "accept error %s\n", strerror(errno));
-			continue;
-		}
-		fdarray[num_connections] = client_fd;
-		num_connections++;
-		// For debugging purpose
-		if (getpeername(client_fd, (struct sockaddr *) &client_addr, &addr_size) < 0) {
-			fprintf(stderr, "getpeername error %s\n", strerror(errno));
-		}
+		if(num_connections < MAX_CONN_HIGH_WATERMARK*2){
 
-		strncpy(client_hname, inet_ntoa(client_addr.sin_addr), MAX_ADDR_NAME);
-		strncpy(server_hname, inet_ntoa(remote_addr.sin_addr), MAX_ADDR_NAME);
+			client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr, &addr_size);
+			fdarray[num_connections] = client_fd;
+			num_connections++;
+			printf("Client Socket Found. FD = %d\n", client_fd);
+			if(client_fd == -1) {
+				fprintf(stderr, "accept error %s\n", strerror(errno));
+				continue;
+			}
 
-		// TODO: Disable following printf before submission
-		printf("Connection proxied: %s:%d --> %s:%d\n",
-				client_hname, ntohs(client_addr.sin_port),
-				server_hname, ntohs(remote_addr.sin_port));
+			// For debugging purpose
+			if (getpeername(client_fd, (struct sockaddr *) &client_addr, &addr_size) < 0) {
+				fprintf(stderr, "getpeername error %s\n", strerror(errno));
+				break;
+			}
 
-		// Connect to the server
-		if ((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-			fprintf(stderr, "socket error %s\n", strerror(errno));
-			close(client_fd);
-			continue;
-		}
-		fdarray[num_connections] = server_fd;
-		num_connections++;
-		printf("Server Socket Found...\n");
+			strncpy(client_hname, inet_ntoa(client_addr.sin_addr), MAX_ADDR_NAME);
+			strncpy(server_hname, inet_ntoa(remote_addr.sin_addr), MAX_ADDR_NAME);
 
-		if (connect(server_fd, (struct sockaddr *) &remote_addr, 
-			sizeof(struct sockaddr_in)) <0) {
-			if (errno != EINPROGRESS) {
-				fprintf(stderr, "connect error %s\n", strerror(errno));
-				close(client_fd);
+			// TODO: Disable following printf before submission
+			printf("Connection proxied: %s:%d --> %s:%d\n",
+					client_hname, ntohs(client_addr.sin_port),
+					server_hname, ntohs(remote_addr.sin_port));
+
+			// Connect to the server
+			if ((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+				fprintf(stderr, "socket error %s\n", strerror(errno));
 				close(server_fd);
 				continue;
-			}		
+			}
+			fdarray[num_connections] = server_fd;
+			num_connections++;
+			printf("Server Socket Found. FD = %d\n", server_fd);
+			
+
+			if (connect(server_fd, (struct sockaddr *) &remote_addr, 
+				sizeof(struct sockaddr_in)) <0) {
+				if (errno != EINPROGRESS) {
+					fprintf(stderr, "connect error %s\n", strerror(errno));
+					close(client_fd);
+					close(server_fd);
+					continue;
+				}		
+			}
+
 		}
 
-		printf("Server Connected...\n");
 
 		/*
 		fcntl(client_fd, F_SETFL, O_NONBLOCK);
