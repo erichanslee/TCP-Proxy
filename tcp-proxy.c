@@ -31,7 +31,7 @@
 #define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
 
 /* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(256)
+#define MAX_CONN_HIGH_WATERMARK	(2)
 #define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
 #define MAX_THREAD_NUM	4
@@ -53,8 +53,13 @@ void __loop(int proxy_fd)
 	struct worker_thread *thread;
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
+	int fdarray[MAX_CONN_HIGH_WATERMARK*2];
+	int num_fds=0;
+
 
 	while(1) {
+
+
 		memset(&client_addr, 0, sizeof(struct sockaddr_in));
 		addr_size = sizeof(client_addr);
 		client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr,
@@ -63,7 +68,8 @@ void __loop(int proxy_fd)
 			fprintf(stderr, "accept error %s\n", strerror(errno));
 			continue;
 		}
-
+		fdarray[num_connections] = client_fd;
+		num_connections++;
 		// For debugging purpose
 		if (getpeername(client_fd, (struct sockaddr *) &client_addr, &addr_size) < 0) {
 			fprintf(stderr, "getpeername error %s\n", strerror(errno));
@@ -83,7 +89,8 @@ void __loop(int proxy_fd)
 			close(client_fd);
 			continue;
 		}
-
+		fdarray[num_connections] = server_fd;
+		num_connections++;
 		printf("Server Socket Found...\n");
 
 		if (connect(server_fd, (struct sockaddr *) &remote_addr, 
@@ -104,9 +111,12 @@ void __loop(int proxy_fd)
 		*/
 		
 		// see header tcp-proxy.h
+		
+		/*
 		start_proxy(client_fd, server_fd);
 		close(client_fd);
 		close(server_fd);
+		*/
 	}
 }
 

@@ -1,6 +1,9 @@
 Serial:
 
-As send and recv are both blocking, a serial implementation requires us to convert send and recv to the nonblocking versions. This makes the serial version more inefficient as the CPU might be busy looping when the message actually arrives
+As send and recv are both blocking, a serial implementation requires us to convert send and recv to the nonblocking versions (or deal with some other workaround). 
+
+The naive way would be to use fcntl to change the socket file descriptors to nonblocking. However, this is an inefficient implementation as our CPU will most likely be looping while a message arrives. 
+The better way would be to use select
 
 Threaded:
 
