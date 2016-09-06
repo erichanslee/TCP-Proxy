@@ -66,7 +66,8 @@ void * ThreadTask(void *thread_arg){
 
 // Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1
 int findval(struct connection * array, int size, int val){
-	for(int i = 0; i < size; i++){
+	int i;
+	for(i = 0; i < size; i++){
 		if(array[i].client_fd == val && array[i].server_fd == val){
 			return i;
 		}
@@ -117,7 +118,7 @@ int start_proxy(struct thread_data *mydata){
 	int exitflag = 0; 
 	void *client_buf = malloc(BUF_SIZE);
 	void *server_buf = malloc(BUF_SIZE);
-	int size, maxfd;
+	int size, maxfd, i;
 
 
 
@@ -133,7 +134,7 @@ int start_proxy(struct thread_data *mydata){
 			//todo: need to buffer
 		FD_ZERO(&readfds);
 
-		for(int i = mydata->threadidx; i < MAX_CONN_HIGH_WATERMARK; i+=NUM_THREADS){
+		for(i = mydata->threadidx; i < MAX_CONN_HIGH_WATERMARK; i+=NUM_THREADS){
 			int client_fd = mydata->fdarray[i].client_fd;
 			int server_fd = mydata->fdarray[i].server_fd;
 			if(client_fd != -1 && server_fd != -1){
@@ -146,7 +147,7 @@ int start_proxy(struct thread_data *mydata){
 
 		select(maxfd, &readfds, NULL, NULL, &tv);
 		
-		for(int i = mydata->threadidx; i < MAX_CONN_HIGH_WATERMARK; i+=NUM_THREADS){
+		for(i = mydata->threadidx; i < MAX_CONN_HIGH_WATERMARK; i+=NUM_THREADS){
 			int client_fd = mydata->fdarray[i].client_fd;
 			int server_fd = mydata->fdarray[i].server_fd;
 			if(FD_ISSET(client_fd, &readfds)){

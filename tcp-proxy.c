@@ -39,16 +39,17 @@ void __loop(int proxy_fd)
 	struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
 	int idx=0;
 	int printflag = 1;
+	int i;
 
 	// set connection fields = -1 to represent non-assignment
-	for(int i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
+	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
 		fdarray[i].client_fd = -1;
 		fdarray[i].server_fd = -1;
 	}
 
 	//create threads
 	pthread_t threads[NUM_THREADS];
-	for(int i = 0; i < NUM_THREADS; i++){
+	for(i = 0; i < NUM_THREADS; i++){
 		printf("Creating thread %d\n", i);
 		thread_data_array[i].threadidx = i;
 		thread_data_array[i].fdarray = fdarray;
