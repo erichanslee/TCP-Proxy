@@ -25,11 +25,13 @@
 
 	for(t=0; t<NUM_THREADS; t++)
 	{
-	   printf("Creating thread %ld\n", t);
+	   printf("Creating thread %d\n", t);
 	   rc = pthread_create(&threads[t], NULL, BusyWork, (void *) &taskids[t]);
 	}
 
-
+    for(i = 0; i < NUM_THREADS; i ++){
+    	taskids[i] = 1;
+    }
 
     /* Last thing that main() should do */
     pthread_exit(NULL);

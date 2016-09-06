@@ -22,31 +22,9 @@
 #include "list.h"
 #include "tcp-proxy.h"
 
-#define MAX_LISTEN_BACKLOG 5
-#define MAX_ADDR_NAME	32
-#define ONE_K	1024
 
-/* Data that can pile up to be sent before reading must stop temporarily */
-#define MAX_CONN_BACKLOG	(8*ONE_K)
-#define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
 
-/* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(2)
-#define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
-#define MAX_THREAD_NUM	4
-
-struct sockaddr_in remote_addr; /* The address of the target server */
-
-#define BUF_SIZE 4096
-
-struct buffer{
-};
-
-struct connection{
-	int client_fd;
-	int server_fd;
-};
 
 void __loop(int proxy_fd)
 {
@@ -59,20 +37,33 @@ void __loop(int proxy_fd)
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
 	struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
-	int num_connections=0;
+	int idx=0;
 	int printflag = 1;
+
+	// set connection fields = -1 to represent non-assignment
+	for(int i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
+		fdarray[i].client_fd = -1;
+		fdarray[i].server_fd = -1;
+	}
+
+	//create threads
+	pthread_t threads[NUM_THREADS];
+	for(int i = 0; i < NUM_THREADS; i++){
+		printf("Creating thread %d\n", i);
+		thread_data_array[i].threadidx = i;
+		thread_data_array[i].fdarray = fdarray;
+		pthread_create(&threads[i], NULL, ThreadTask, (void *)&thread_data_array[i]);
+	}
 
 	while(1) {
 		// Notify client that no new connections are being accepted
-		if(num_connections == MAX_CONN_HIGH_WATERMARK && printflag == 1 ){
-			printf("Reached Max Connections! Not accepting any new ones\n");
-			printflag = 0;
-		}
+		int idx = findval(fdarray, MAX_CONN_HIGH_WATERMARK, -1);
+
 
 		//Accept Client-Side 
 		memset(&client_addr, 0, sizeof(struct sockaddr_in));
 		addr_size = sizeof(client_addr);
-		if(num_connections < MAX_CONN_HIGH_WATERMARK){
+		if(idx < MAX_CONN_HIGH_WATERMARK){
 
 			// Connect to client
 			client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr, &addr_size);
@@ -103,10 +94,10 @@ void __loop(int proxy_fd)
 			}
 
 			// Set struct data
-			fdarray[num_connections].client_fd = client_fd;
-			fdarray[num_connections].server_fd = server_fd;
-			printf("New Connection Set up from %d to %d\n", fdarray[num_connections].client_fd, fdarray[num_connections].server_fd);
-			num_connections++;
+			fdarray[idx].client_fd = client_fd;
+			fdarray[idx].server_fd = server_fd;
+			printf("New Connection Set up from %d to %d\n", fdarray[idx].client_fd, fdarray[idx].server_fd);
+			idx++;
 			
 
 
@@ -136,6 +127,8 @@ void __loop(int proxy_fd)
 		close(server_fd);
 		*/
 	}
+
+	pthread_exit(NULL);
 }
 
 
