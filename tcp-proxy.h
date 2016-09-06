@@ -96,19 +96,18 @@ int sendall(int destination_fd, char *buf, int len){
 int forward(int origin_fd, int destination_fd, void *buf){
 	int size;
 	if(size = recv(origin_fd, buf, BUF_SIZE, 0)){
-		if(size < -1){
+		if(size < 0){
 			fprintf(stderr, "Receiving error %s\n", strerror(errno));
 			close(origin_fd);
 			return 0;
 		}
-		if(size == -1){
-			// do nothing
-		}
+
 		else{
 			if(sendall(destination_fd, buf, size) < 0){
 				fprintf(stderr, "Sending error %s\n", strerror(errno));
 				return 0;
 			}
+			print("sendall called");
 		}
 	}
 }
@@ -151,12 +150,12 @@ int start_proxy(struct thread_data *mydata){
 			int client_fd = mydata->fdarray[i].client_fd;
 			int server_fd = mydata->fdarray[i].server_fd;
 			if(FD_ISSET(client_fd, &readfds)){
-				printf("fowarding from thread %d and file descriptor %d...\n", mydata->threadidx, client_fd);
+				//printf("fowarding from thread %d and file descriptor %d...\n", mydata->threadidx, client_fd);
 				forward(client_fd, server_fd, client_buf);
 			}
 			
 			if(FD_ISSET(server_fd, &readfds)){
-				printf("fowarding from thread %d and file descriptor %d...\n", mydata->threadidx, server_fd);
+				//printf("fowarding from thread %d and file descriptor %d...\n", mydata->threadidx, server_fd);
 				forward(server_fd, client_fd, server_buf);
 			}
 		}
