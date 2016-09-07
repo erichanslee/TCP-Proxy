@@ -2,16 +2,9 @@
 struct sockaddr_in remote_addr; /* The address of the target server */
 struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
 
-// Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1
-int findval(struct connection * array, int size, int val){
-	int i;
-	for(i = 0; i < size; i++){
-		if(array[i].client_fd == val && array[i].server_fd == val){
-			return i;
-		}
-	}
-	return size + 1;
-}
+
+
+
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
 	... Changed for syntatic clarity and functionality*/
@@ -96,14 +89,19 @@ void __loop(int proxy_fd)
 	struct worker_thread *thread;
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
-	int i;
-	
+	pthread_t threads[MAX_THREAD_NUM];
+	int i, idx;
+
 	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
 		fdarray[i].client_fd = -1;
 		fdarray[i].server_fd = -1;
 	}
 
 	while(1) {
+
+		idx = findval(fdarray, MAX_CONN_HIGH_WATERMARK, -1);
+
+
 		memset(&client_addr, 0, sizeof(struct sockaddr_in));
 		addr_size = sizeof(client_addr);
 		client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr,
@@ -147,14 +145,19 @@ void __loop(int proxy_fd)
 
 		printf("Server Connected...\n");
 
-		/*
-		fcntl(client_fd, F_SETFL, O_NONBLOCK);
-		fcntl(server_fd, F_SETFL, O_NONBLOCK);
-		*/
+		fdarray[idx].client_fd = client_fd;
+		fdarray[idx].server_fd = server_fd;
+
 		
-		// see header tcp-proxy.h
-		start_proxy(client_fd, server_fd);
+
+		start_proxy(fdarray[idx].client_fd, fdarray[idx].server_fd);
 		close(client_fd);
 		close(server_fd);
 	}
+}
+
+// Function to pass into ptrheads creation
+void * ThreadTask(void *thread_arg){
+	int threadidx = (int) thread_arg;
+	//start_proxy(client_fd, server_fd);
 }
