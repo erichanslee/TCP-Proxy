@@ -29,7 +29,7 @@
 #define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
 
 /* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(256)
+#define MAX_CONN_HIGH_WATERMARK	(1)
 #define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
 #define MAX_THREAD_NUM	1
