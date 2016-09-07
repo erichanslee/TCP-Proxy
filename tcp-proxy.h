@@ -90,7 +90,6 @@ void * ThreadTask(void *thread_arg){
 			client_fd = fdarray[i].client_fd;
 			server_fd = fdarray[i].server_fd;
 			if( (client_fd != -1) && (server_fd != -1) ){
-				printf("hello\n");
 				start_proxy(client_fd, server_fd);
 			}
 		}
