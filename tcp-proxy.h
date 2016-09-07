@@ -79,6 +79,27 @@ int start_proxy(int client_fd, int server_fd){
 	}
 }
 
+
+// Function to pass into ptrheads creation
+void * ThreadTask(void *thread_arg){
+	int threadidx = (int)thread_arg;
+	printf("Hello from Thread %d!\n", threadidx);
+	int i, client_fd, server_fd;
+	while(1){
+		for(i = threadidx; i < MAX_CONN_HIGH_WATERMARK; i +=MAX_THREAD_NUM){
+			client_fd = fdarray[i].client_fd;
+			server_fd = fdarray[i].server_fd;
+			if( (client_fd != -1) && (server_fd != -1) ){
+				printf("hello\n");
+				start_proxy(client_fd, server_fd);
+			}
+		}
+
+	}
+
+		
+}
+
 void __loop(int proxy_fd)
 {
 	struct sockaddr_in client_addr;
@@ -95,6 +116,10 @@ void __loop(int proxy_fd)
 	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
 		fdarray[i].client_fd = -1;
 		fdarray[i].server_fd = -1;
+	}
+
+	for(i = 0; i < MAX_THREAD_NUM; i++){
+		int rc = pthread_create(&threads[i], NULL, ThreadTask, (void *)i);
 	}
 
 	while(1) {
@@ -149,15 +174,10 @@ void __loop(int proxy_fd)
 		fdarray[idx].server_fd = server_fd;
 
 		
-
+		/*
 		start_proxy(fdarray[idx].client_fd, fdarray[idx].server_fd);
 		close(client_fd);
 		close(server_fd);
+		*/
 	}
-}
-
-// Function to pass into ptrheads creation
-void * ThreadTask(void *thread_arg){
-	int threadidx = (int) thread_arg;
-	//start_proxy(client_fd, server_fd);
 }
