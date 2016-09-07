@@ -1,39 +1,17 @@
- // TCP Proxy header.
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <signal.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include "list.h"
+#include "header.h"
+struct sockaddr_in remote_addr; /* The address of the target server */
+struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
 
-#ifndef max
-    #define max(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
-#define MAX_LISTEN_BACKLOG 5
-#define MAX_ADDR_NAME	32
-#define ONE_K	1024
-
-/* Data that can pile up to be sent before reading must stop temporarily */
-#define MAX_CONN_BACKLOG	(8*ONE_K)
-#define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
-
-/* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(256)
-#define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
-#define MAX_THREAD_NUM	4
-#define BUF_SIZE 4096
-
+// Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1
+int findval(struct connection * array, int size, int val){
+	int i;
+	for(i = 0; i < size; i++){
+		if(array[i].client_fd == val && array[i].server_fd == val){
+			return i;
+		}
+	}
+	return size + 1;
+}
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
 	... Changed for syntatic clarity and functionality*/
@@ -59,10 +37,12 @@ int forward(int origin_fd, int destination_fd, void *buf){
 		if(size < -1){
 			fprintf(stderr, "Receiving error %s\n", strerror(errno));
 			close(origin_fd);
+			close(destination_fd);
 			return 0;
 		}
-		if(size == -1){
-			// do nothing
+		if(size == 0){
+			close(origin_fd);
+			close(destination_fd);
 		}
 		else{
 			if(sendall(destination_fd, buf, size) < 0){
@@ -75,7 +55,6 @@ int forward(int origin_fd, int destination_fd, void *buf){
 
 int start_proxy(int client_fd, int server_fd){
 	printf("Staring Proxy Forwarding...");
-	int exitflag = 0; 
 	void *client_buf = malloc(BUF_SIZE);
 	void *server_buf = malloc(BUF_SIZE);
 	int size, maxfd;
@@ -89,8 +68,6 @@ int start_proxy(int client_fd, int server_fd){
 	maxfd = max(client_fd, server_fd) + 1;
 
 	while(1){
-		if(exitflag == 1)
-			break;
 			//todo: need to buffer
 		FD_ZERO(&readfds);
 		FD_SET(client_fd, &readfds);
@@ -98,15 +75,86 @@ int start_proxy(int client_fd, int server_fd){
 		select(maxfd, &readfds, NULL, NULL, &tv);
 		
 		if(FD_ISSET(client_fd, &readfds)){
-			printf("fowarding...\n!");
 			forward(client_fd, server_fd, client_buf);
 		}
 		
 		if(FD_ISSET(server_fd, &readfds)){
-			printf("fowarding...\n!");
 			forward(server_fd, client_fd, server_buf);
 		}
 		
 		
+	}
+}
+
+void __loop(int proxy_fd)
+{
+	struct sockaddr_in client_addr;
+	socklen_t addr_size;
+	int client_fd, server_fd;
+	struct client *client;
+	int cur_thread=0;
+	struct worker_thread *thread;
+	char client_hname[MAX_ADDR_NAME+1];
+	char server_hname[MAX_ADDR_NAME+1];
+	int i;
+	
+	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
+		fdarray[i].client_fd = -1;
+		fdarray[i].server_fd = -1;
+	}
+
+	while(1) {
+		memset(&client_addr, 0, sizeof(struct sockaddr_in));
+		addr_size = sizeof(client_addr);
+		client_fd = accept(proxy_fd, (struct sockaddr *)&client_addr,
+					&addr_size);
+		if(client_fd == -1) {
+			fprintf(stderr, "accept error %s\n", strerror(errno));
+			continue;
+		}
+
+		// For debugging purpose
+		if (getpeername(client_fd, (struct sockaddr *) &client_addr, &addr_size) < 0) {
+			fprintf(stderr, "getpeername error %s\n", strerror(errno));
+		}
+
+		strncpy(client_hname, inet_ntoa(client_addr.sin_addr), MAX_ADDR_NAME);
+		strncpy(server_hname, inet_ntoa(remote_addr.sin_addr), MAX_ADDR_NAME);
+
+		// TODO: Disable following printf before submission
+		printf("Connection proxied: %s:%d --> %s:%d\n",
+				client_hname, ntohs(client_addr.sin_port),
+				server_hname, ntohs(remote_addr.sin_port));
+
+		// Connect to the server
+		if ((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+			fprintf(stderr, "socket error %s\n", strerror(errno));
+			close(client_fd);
+			continue;
+		}
+
+		printf("Server Socket Found...\n");
+
+		if (connect(server_fd, (struct sockaddr *) &remote_addr, 
+			sizeof(struct sockaddr_in)) <0) {
+			if (errno != EINPROGRESS) {
+				fprintf(stderr, "connect error %s\n", strerror(errno));
+				close(client_fd);
+				close(server_fd);
+				continue;
+			}		
+		}
+
+		printf("Server Connected...\n");
+
+		/*
+		fcntl(client_fd, F_SETFL, O_NONBLOCK);
+		fcntl(server_fd, F_SETFL, O_NONBLOCK);
+		*/
+		
+		// see header tcp-proxy.h
+		start_proxy(client_fd, server_fd);
+		close(client_fd);
+		close(server_fd);
 	}
 }
