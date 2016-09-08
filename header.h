@@ -40,14 +40,9 @@ struct connection{
 	int server_fd;
 };
 
-// Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1
-int findval(struct connection * array, int size, int val){
-	int i;
-	for(i = 0; i < size; i++){
-		if(array[i].client_fd == val && array[i].server_fd == val){
-			return i;
-		}
-	}
-	return size + 1;
-}
-
+int sendall(int destination_fd, char *buf, int len);
+int forward(int origin_fd, int destination_fd, void *buf);
+int start_proxy(int client_fd, int server_fd);
+void * ThreadTask(void *thread_arg);
+void __loop(int proxy_fd);
+int findval(struct connection * array, int size, int val);

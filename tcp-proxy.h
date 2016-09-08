@@ -1,10 +1,18 @@
 #include "header.h"
 struct sockaddr_in remote_addr; /* The address of the target server */
-struct connection fdarray[MAX_CONN_HIGH_WATERMARK];
+struct connection fdarray[MAX_CONN_HIGH_WATERMARK]; /* array of file descriptors */
+int MAX_CONNECTIONS = 0; /* Optimization variable to track maximum # of connections */
 
-
-
-
+// Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1
+int findval(struct connection * array, int size, int val){
+	int i;
+	for(i = 0; i < size; i++){
+		if(array[i].client_fd == val && array[i].server_fd == val){
+			return i;
+		}
+	}
+	return size + 1;
+}
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
 	... Changed for syntatic clarity and functionality*/
@@ -83,10 +91,10 @@ int start_proxy(int client_fd, int server_fd){
 // Function to pass into ptrheads creation
 void * ThreadTask(void *thread_arg){
 	int threadidx = (int)thread_arg;
-	printf("Hello from Thread %d!\n", threadidx);
+	printf("Thread %d Spawned and Ready!\n", threadidx);
 	int i, client_fd, server_fd;
 	while(1){
-		for(i = threadidx; i < MAX_CONN_HIGH_WATERMARK; i +=MAX_THREAD_NUM){
+		for(i = threadidx; i < MAX_CONNECTIONS; i +=MAX_THREAD_NUM){
 			client_fd = fdarray[i].client_fd;
 			server_fd = fdarray[i].server_fd;
 			if( (client_fd != -1) && (server_fd != -1) ){
@@ -171,6 +179,7 @@ void __loop(int proxy_fd)
 
 		fdarray[idx].client_fd = client_fd;
 		fdarray[idx].server_fd = server_fd;
+		MAX_CONNECTIONS++;
 
 		
 		/*

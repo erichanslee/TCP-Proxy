@@ -1,10 +1,17 @@
-Serial:
+Implementation Details:
 
-As send and recv are both blocking, a serial implementation requires us to convert send and recv to the nonblocking versions. This makes the serial version more inefficient as the CPU might be busy looping when the message actually arrives
+As send and recv are both blocking, a serial implementation requires us to convert send and recv to the nonblocking versions. This makes the serial version more inefficient as the CPU might be busy looping when the message actually arrives. Therefore, we use select();
 
-Threaded:
 
-Have at least one thread manage recv from both client and destination side.  
+This is how threading is implemented: We have an array fdarray (of fixed length MAX_CONN_HIGH_WATERMARK) storing file descriptors. Our main thread handles connections, dumping file descriptors into fdarray whenever a connection is received. Then we have a number of threads (implemented via posix threads) working on forwarding data from a subset of the file descriptors in fdarray. The subset is distrubted as follows for easy and effective load balancing, where thread i reads the i + numthreads*k elements of fdarray. So if there are four threads:
+
+
+			fdarray
+start->[1|2|3|4|1|2...3|4]<-end
+
+
+If fdarray is full, then main won't write any new connections into fdarray. Furthermore, if a connection is closed, our thread will overwrite the filedescriptors located in fdarray[m] with a special symbol indicating that the space is empty (I used -1). Main will then dump a new connection into fdarray[m] whenever possible. Thus, there is no need for sychronization; threads do not write/read from overlapping areas in memory. Furthermore, main and a thread will always write over the same piece of memory in a sequential manner; first a thread writes over memory indicating its ready for a new fd, and only then will main overwrite it (if there is a new incoming connection main will first attempt to fill the end of fdarray first). 
+
 
 
 

@@ -1,113 +1,114 @@
+/******************************************************************************
+* FILE: condvar.c
+* DESCRIPTION:
+*   Example code for using Pthreads condition variables.  The main thread
+*   creates three threads.  Two of those threads increment a "count" variable,
+*   while the third thread watches the value of "count".  When "count" 
+*   reaches a predefined limit, the waiting thread is signaled by one of the
+*   incrementing threads. The waiting thread "awakens" and then modifies
+*   count. The program continues until the incrementing threads reach
+*   TCOUNT. The main program prints the final value of count.
+* SOURCE: Adapted from example code in "Pthreads Programming", B. Nichols
+*   et al. O'Reilly and Associates. 
+* LAST REVISED: 10/14/10  Blaise Barney
+******************************************************************************/
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <signal.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include "list.h"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#define NUM_THREADS  3
+#define TCOUNT 10
+#define COUNT_LIMIT 12
 
-#define PORT "3491" // the port users will be connecting to
-#define BACKLOG 10 // how many pending connections queue will hold
+int     count = 0;
+pthread_mutex_t count_mutex;
+pthread_cond_t count_threshold_cv;
 
-
-void sigchld_handler(int s)
+void *inc_count(void *t) 
 {
- // waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-	while(waitpid(-1, NULL, WNOHANG) > 0);
-	errno = saved_errno;
+  int i;
+  long my_id = (long)t;
+
+  for (i=0; i < TCOUNT; i++) {
+    pthread_mutex_lock(&count_mutex);
+    count++;
+
+    /* 
+    Check the value of count and signal waiting thread when condition is
+    reached.  Note that this occurs while mutex is locked. 
+    */
+    if (count == COUNT_LIMIT) {
+      printf("inc_count(): thread %ld, count = %d  Threshold reached. ",
+             my_id, count);
+      pthread_cond_signal(&count_threshold_cv);
+      printf("Just sent signal.\n");
+      }
+    printf("inc_count(): thread %ld, count = %d, unlocking mutex\n", 
+	   my_id, count);
+    pthread_mutex_unlock(&count_mutex);
+
+    /* Do some work so threads can alternate on mutex lock */
+    sleep(1);
+    }
+  pthread_exit(NULL);
 }
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
+
+void *watch_count(void *t) 
 {
-	if (sa->sa_family == AF_INET) {
-		return &(((struct sockaddr_in*)sa)->sin_addr);
-	}
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-int main(void){
+  long my_id = (long)t;
 
- int sockfd, new_fd; // listen on sock_fd, new connection on new_fd
- struct addrinfo hints, *servinfo, *p;
- struct sockaddr_storage their_addr; // connector's address information
- socklen_t sin_size;
- struct sigaction sa;
- int yes=1;
- char s[INET6_ADDRSTRLEN];
- int rv;
- memset(&hints, 0, sizeof hints);
- hints.ai_family = AF_UNSPEC;
- hints.ai_socktype = SOCK_STREAM;
- hints.ai_flags = AI_PASSIVE; // use my IP
+  printf("Starting watch_count(): thread %ld\n", my_id);
 
- if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
- 	fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
- 	return 1;
- }
- // loop through all the results and bind to the first we can
- for(p = servinfo; p != NULL; p = p->ai_next) {
- 	if ((sockfd = socket(p->ai_family, p->ai_socktype,
- 		p->ai_protocol)) == -1) {
- 		perror("server: socket");
- 	continue;
- 	}
-	 if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
-	 	sizeof(int)) == -1) {
-	 	perror("setsockopt");
-	 exit(1);
-	}
-	if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-		close(sockfd);
-		perror("server: bind");
-		continue;
-	}
-	break;
-}
- freeaddrinfo(servinfo); // all done with this structure
- if (p == NULL) {
- 	fprintf(stderr, "server: failed to bind\n");
- 	exit(1);
- }
- if (listen(sockfd, BACKLOG) == -1) {
- 	perror("listen");
- 	exit(1);
- }
- sa.sa_handler = sigchld_handler; // reap all dead processes
- sigemptyset(&sa.sa_mask);
- sa.sa_flags = SA_RESTART;
- if (sigaction(SIGCHLD, &sa, NULL) == -1) {
- 	perror("sigaction");
- 	exit(1);
- }
- printf("server: waiting for connections...\n");
- while(1) { // main accept() loop
- 	sin_size = sizeof their_addr;
- 	new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
- 	if (new_fd == -1) {
- 		perror("accept");
- 		continue;
- 	}
- 	inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s, sizeof s);
- 	printf("server: got connection from %s\n", s);
-	if (!fork()) { // this is the child process
-	 close(sockfd); // child doesn't need the listener
-	if (send(new_fd, "Hello, world!", 13, 0) == -1)
-	 	perror("send");
-	close(new_fd);
-	exit(0);
-}
- close(new_fd); // parent doesn't need this
+  /*
+  Lock mutex and wait for signal.  Note that the pthread_cond_wait routine
+  will automatically and atomically unlock mutex while it waits. 
+  Also, note that if COUNT_LIMIT is reached before this routine is run by
+  the waiting thread, the loop will be skipped to prevent pthread_cond_wait
+  from never returning.
+  */
+  pthread_mutex_lock(&count_mutex);
+  while (count < COUNT_LIMIT) {
+    printf("watch_count(): thread %ld Count= %d. Going into wait...\n", my_id,count);
+    pthread_cond_wait(&count_threshold_cv, &count_mutex);
+    printf("watch_count(): thread %ld Condition signal received. Count= %d\n", my_id,count);
+    printf("watch_count(): thread %ld Updating the value of count...\n", my_id,count);
+    count += 125;
+    printf("watch_count(): thread %ld count now = %d.\n", my_id, count);
+    }
+  printf("watch_count(): thread %ld Unlocking mutex.\n", my_id);
+  pthread_mutex_unlock(&count_mutex);
+  pthread_exit(NULL);
 }
 
-return 0;
+int main(int argc, char *argv[])
+{
+  int i, rc; 
+  long t1=1, t2=2, t3=3;
+  pthread_t threads[3];
+  pthread_attr_t attr;
+
+  /* Initialize mutex and condition variable objects */
+  pthread_mutex_init(&count_mutex, NULL);
+  pthread_cond_init (&count_threshold_cv, NULL);
+
+  /* For portability, explicitly create threads in a joinable state */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  pthread_create(&threads[0], &attr, watch_count, (void *)t1);
+  pthread_create(&threads[1], &attr, inc_count, (void *)t2);
+  pthread_create(&threads[2], &attr, inc_count, (void *)t3);
+
+  /* Wait for all threads to complete */
+  for (i = 0; i < NUM_THREADS; i++) {
+    pthread_join(threads[i], NULL);
+  }
+  printf ("Main(): Waited and joined with %d threads. Final value of count = %d. Done.\n", 
+          NUM_THREADS, count);
+
+  /* Clean up and exit */
+  pthread_attr_destroy(&attr);
+  pthread_mutex_destroy(&count_mutex);
+  pthread_cond_destroy(&count_threshold_cv);
+  pthread_exit (NULL);
+
 }
