@@ -42,7 +42,7 @@ struct connection{
 
 int sendall(int destination_fd, char *buf, int len);
 int forward(int origin_fd, int destination_fd, void *buf);
-int start_proxy(int client_fd, int server_fd);
+//int start_proxy(int client_fd, int server_fd);
 void * ThreadTask(void *thread_arg);
 void __loop(int proxy_fd);
 int findval(struct connection * array, int size, int val);

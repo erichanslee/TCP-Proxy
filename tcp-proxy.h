@@ -1,11 +1,10 @@
 #include "header.h"
 #include <pthread.h>
 
-// Global Variables
+/* Global Variables */
 struct sockaddr_in remote_addr; /* The address of the target server */
 struct connection fdarray[MAX_CONN_HIGH_WATERMARK]; /* array of file descriptors */
 pthread_mutex_t count_mutex[MAX_THREAD_NUM];
-pthread_cond_t count_threshold_cv[MAX_THREAD_NUM];
 pthread_t threads[MAX_THREAD_NUM];
 int MAX_CONNECTIONS = 0; /* Optimization variable to track maximum # of connections */
 
@@ -24,8 +23,8 @@ int findval(struct connection * array, int size, int val){
 	... Changed for syntatic clarity and functionality*/
 int sendall(int destination_fd, char *buf, int len)
 {
-	int total = 0; 
-	int bytesleft = len; 
+	int total = 0;
+	int bytesleft = len;
 	int n;
 	while(total < len) {
 		n = send(destination_fd, buf+total, bytesleft, 0);
@@ -39,30 +38,26 @@ int sendall(int destination_fd, char *buf, int len)
 
 
 int forward(int origin_fd, int destination_fd, void *buf){
-	int size = 0;
-//	while(1){
-		size = recv(origin_fd, buf, BUF_SIZE, 0);
-		if(size < -1){
-			fprintf(stderr, "Receiving error %s\n", strerror(errno));
-			close(origin_fd);
-			close(destination_fd);
-//			break;
-		}
-		if(size == 0){
-			close(origin_fd);
-			close(destination_fd);
-	//		break;
-		}
-		else{
-			sendall(destination_fd, buf, size);
-		}
-//	}
+    ssize_t size = 0;
+    size = recv(origin_fd, buf, BUF_SIZE, 0);
+    if(size < -1){
+        fprintf(stderr, "Receiving error %s\n", strerror(errno));
+        close(origin_fd);
+        close(destination_fd);
+    }
+    if(size == 0){
+        close(origin_fd);
+        close(destination_fd);
+    }
+    else{
+        sendall(destination_fd, buf, size);
+    }
 	return 0;
 }
 
-int start_proxy(int client_fd, int server_fd){
-	void *client_buf = malloc(BUF_SIZE);
-	void *server_buf = malloc(BUF_SIZE);
+int start_proxy(int client_fd, int server_fd, void * client_buf, void * server_buf){
+
+
 	int size, maxfd;
 
 	fd_set readfds;
@@ -71,9 +66,7 @@ int start_proxy(int client_fd, int server_fd){
 	tv.tv_usec = 0;
 	maxfd = max(client_fd, server_fd) + 1;
 
-	printf("Staring Proxy Forwarding...\n");
 	while(1){
-			//todo: need to buffer
 		FD_ZERO(&readfds);
 		FD_SET(client_fd, &readfds);
 		FD_SET(server_fd, &readfds);
@@ -97,50 +90,53 @@ void Initstuff(){
 		fdarray[i].server_fd = -1;
 	}
 
-	for(i = 0; i < MAX_THREAD_NUM; i++){
-		pthread_create(&threads[i], NULL, ThreadTask, (void *)i);
-	}
+    for (i = 0; i < MAX_THREAD_NUM; i++) {
+        pthread_mutex_init(&count_mutex[i], NULL);
+        pthread_mutex_lock(&count_mutex[i]);
+    }
 
-	for (i = 0; i < MAX_THREAD_NUM; i++) {
-		pthread_mutex_init(&count_mutex[i], NULL);
-		pthread_cond_init (&count_threshold_cv[i], NULL);
-	}
+    for(i = 0; i < MAX_THREAD_NUM; i++){
+        pthread_create(&threads[i], NULL, ThreadTask, (void *)i);
+    }
+
 }
 
-// Function to pass into ptrheads creation
+// Function to pass into pthreads creation
 void * ThreadTask(void *thread_arg){
 	int threadidx = (int)thread_arg;
-	printf("Thread %d Spawned and Ready!\n", threadidx);
-	int i, client_fd, server_fd;
+    void *client_buf = malloc(BUF_SIZE);
+    void *server_buf = malloc(BUF_SIZE);
+    int i, client_fd, server_fd;
 
-	pthread_mutex_lock(&count_mutex[threadidx]);
+
+    printf("Thread %d Spawned and Waiting...\n", threadidx);
+    pthread_mutex_lock(&count_mutex[threadidx]);
+    printf("Thread %d Woken Up!\n", threadidx);
+
 	while(1){
 		for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
 			client_fd = fdarray[i].client_fd;
 			server_fd = fdarray[i].server_fd;
 			if( (client_fd != -1) && (server_fd != -1) ){
-				start_proxy(client_fd, server_fd);
+				start_proxy(client_fd, server_fd, client_buf, server_buf);
 			}
 		}
 	pthread_mutex_unlock(&count_mutex[threadidx]);
 
 	}
 }
-
+ // __loop done by main thread
 void __loop(int proxy_fd)
 {
 	struct sockaddr_in client_addr;
 	socklen_t addr_size;
 	int client_fd, server_fd;
-	struct client *client;
-	int cur_thread=0;
-	struct worker_thread *thread;
 	char client_hname[MAX_ADDR_NAME+1];
 	char server_hname[MAX_ADDR_NAME+1];
-	int i, idx;
+	int idx;
 
 	Initstuff();
-
+    int threadcounter = -1;
 
 	while(1) {
 
@@ -176,7 +172,6 @@ void __loop(int proxy_fd)
 			continue;
 		}
 
-		printf("Server Socket Found...\n");
 
 		if (connect(server_fd, (struct sockaddr *) &remote_addr, 
 			sizeof(struct sockaddr_in)) <0) {
@@ -188,11 +183,15 @@ void __loop(int proxy_fd)
 			}		
 		}
 
-		printf("Server Connected...\n");
+		printf("Connection Made...\n");
 
 		fdarray[idx].client_fd = client_fd;
 		fdarray[idx].server_fd = server_fd;
 		if(MAX_CONNECTIONS < 256) MAX_CONNECTIONS++;
+        if(threadcounter < 4){
+            threadcounter++;
+            pthread_mutex_unlock(&count_mutex[threadcounter]);
+        }
 
 		
 		/*
