@@ -56,22 +56,21 @@ int forward(int origin_fd, int destination_fd, void *buf){
 }
 
 int start_proxy(int client_fd, int server_fd, void * client_buf, void * server_buf){
-
-
 	int size, maxfd;
 
 	fd_set readfds;
 	struct timeval tv;
-	tv.tv_sec = 5;
-	tv.tv_usec = 0;
+
 	maxfd = max(client_fd, server_fd) + 1;
 
 	while(1){
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
 		FD_ZERO(&readfds);
 		FD_SET(client_fd, &readfds);
 		FD_SET(server_fd, &readfds);
+        /* select restarts every 5 seconds to check for new connections */
 		select(maxfd, &readfds, NULL, NULL, &tv);
-		
 		if(FD_ISSET(client_fd, &readfds)){
 			forward(client_fd, server_fd, client_buf);
 		}
@@ -190,14 +189,10 @@ void __loop(int proxy_fd)
 		if(MAX_CONNECTIONS < 256) MAX_CONNECTIONS++;
         if(threadcounter < 4){
             threadcounter++;
+            /* Wake thread threadcounter */
             pthread_mutex_unlock(&count_mutex[threadcounter]);
         }
 
-		
-		/*
-		start_proxy(fdarray[idx].client_fd, fdarray[idx].server_fd);
-		close(client_fd);
-		close(server_fd);
-		*/
+
 	}
 }
