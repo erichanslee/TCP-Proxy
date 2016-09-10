@@ -29,10 +29,10 @@
 #define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
 
 /* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(10)
+#define MAX_CONN_HIGH_WATERMARK	(256)
 #define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
-#define MAX_THREAD_NUM	2
+#define MAX_THREAD_NUM	4
 #define BUF_SIZE 4096
 
 struct connection{
@@ -40,6 +40,21 @@ struct connection{
 	int server_fd;
 };
 
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~ GLOBAL VARIABLES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+ struct sockaddr_in remote_addr; /* The address of the target server */
+ struct connection fdarray[MAX_CONN_HIGH_WATERMARK]; /* array of file descriptors */
+ pthread_mutex_t mutexes[MAX_THREAD_NUM];
+ pthread_t threads[MAX_THREAD_NUM];
+ pthread_mutex_t tot_conn_mutex; /* Mutex for TOTAL_CONNECTIONS */
+ int TOTAL_CONNECTIONS = 0; /* Tracks total number # of connections */
+ int MAX_CONNECTIONS = 0; /* Optimization variable to representing upper bound on # of connections */
+
+
+ /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+ /* ~~~~~~~~~~~~~~~~~~~~~~~ PROXY FUNCTIONS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+ /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 int sendall(int destination_fd, char *buf, int len);
 int forward(int origin_fd, int destination_fd, void *buf);
 //int start_proxy(int client_fd, int server_fd);
@@ -53,7 +68,7 @@ void __loop(int proxy_fd);
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 /* Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1 */
- /* Note: Yes, there is a lot of redundancy but I'd rather have them readable then have harder to understand code */
+ /* Note: Yes, there is some redundancy but I'd rather have them readable then have harder to understand code */
  int findval(struct connection * array, int size, int val){
      int i;
      for(i = 0; i < size; i++){
@@ -82,4 +97,9 @@ void __loop(int proxy_fd);
          }
      }
      return size + 1;
+ }
+
+ struct sockaddr_in copy_remote_addr(struct sockaddr_in remote_addr){
+     struct sockaddr_in copy;
+     memcpy(&copy, &remote_addr, sizeof(copy));
  }
