@@ -29,7 +29,7 @@
 #define GRACE_CONN_BACKLOG	(MAX_CONN_BACKLOG / 2)
 
 /* Watermarks for number of active connections. Lower to 2 for testing */
-#define MAX_CONN_HIGH_WATERMARK	(4)
+#define MAX_CONN_HIGH_WATERMARK	(10)
 #define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
 #define MAX_THREAD_NUM	2
@@ -45,4 +45,41 @@ int forward(int origin_fd, int destination_fd, void *buf);
 //int start_proxy(int client_fd, int server_fd);
 void * ThreadTask(void *thread_arg);
 void __loop(int proxy_fd);
-int findval(struct connection * array, int size, int val);
+
+
+
+ /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+ /* ~~~~~~~~~~~~~~~~~~~~~~ HELPER FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+ /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+/* Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1 */
+ /* Note: Yes, there is a lot of redundancy but I'd rather have them readable then have harder to understand code */
+ int findval(struct connection * array, int size, int val){
+     int i;
+     for(i = 0; i < size; i++){
+         if(array[i].client_fd == val && array[i].server_fd == val){
+             return i;
+         }
+     }
+     return size + 1;
+ }
+
+ int findval_server(struct connection * array, int size, int val){
+     int i;
+     for(i = 0; i < size; i++){
+         if(array[i].server_fd == val){
+             return i;
+         }
+     }
+     return size + 1;
+ }
+
+ int findval_client(struct connection * array, int size, int val){
+     int i;
+     for(i = 0; i < size; i++){
+         if(array[i].client_fd == val){
+             return i;
+         }
+     }
+     return size + 1;
+ }

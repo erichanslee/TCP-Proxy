@@ -8,7 +8,7 @@
 
 int     count = 0;
 int     thread_ids[3] = {0,1,2};
-pthread_mutex_t count_mutex[NUM_THREADS];
+pthread_mutex_t mutexes[NUM_THREADS];
 pthread_cond_t count_threshold_cv[NUM_THREADS];
 
 
@@ -25,10 +25,9 @@ void *watch_count(void *t)
    the waiting thread, the loop will be skipped to prevent pthread_cond_wait
    from never returning. 
    */
-   pthread_mutex_lock(&count_mutex[my_id]);
-   //pthread_cond_wait(&count_threshold_cv[my_id], &count_mutex[my_id]);
+   pthread_mutex_lock(&mutexes[my_id]);
    printf("watch_count(): thread %ld Condition signal received.\n", my_id);
-   pthread_mutex_unlock(&count_mutex[my_id]);
+   pthread_mutex_unlock(&mutexes[my_id]);
    pthread_exit(NULL);
 }
 
@@ -39,8 +38,8 @@ int main (int argc, char *argv[])
 
    /* Initialize mutex and condition variable objects */
 	for(int i = 0; i < NUM_THREADS; i++){
-		pthread_mutex_init(&count_mutex[i], NULL);
-		pthread_mutex_lock(&count_mutex[i]);
+		pthread_mutex_init(&mutexes[i], NULL);
+		pthread_mutex_lock(&mutexes[i]);
 		pthread_cond_init (&count_threshold_cv[i], NULL);
 		pthread_create(&threads[i], NULL, watch_count, (void *)i);
 	}
@@ -50,28 +49,28 @@ int main (int argc, char *argv[])
 	for (i=0; i<TCOUNT; i++) {
 		count++;
 	}
-	pthread_mutex_unlock(&count_mutex[0]);
+	pthread_mutex_unlock(&mutexes[0]);
 	printf("count = %d  Thread Signaled.\n", count);
 	sleep(1);
 
 	for (i=0; i<TCOUNT; i++) {
 		count++;
 	}
-	pthread_mutex_unlock(&count_mutex[1]);
+	pthread_mutex_unlock(&mutexes[1]);
 	printf("count = %d  Thread Signaled.\n", count);
 	sleep(1);
 
 	for (i=0; i<TCOUNT; i++) {
 		count++;
 	}
-	pthread_mutex_unlock(&count_mutex[2]);
+	pthread_mutex_unlock(&mutexes[2]);
 	printf("count = %d  Thread Signaled.\n", count);
 	sleep(1);
 
 
    /* Clean up and exit */
 	for(int i = 0; i < NUM_THREADS; i++){
-		pthread_mutex_destroy(&count_mutex[i]);
+		pthread_mutex_destroy(&mutexes[i]);
 		pthread_cond_destroy(&count_threshold_cv[i]);
 		pthread_exit(NULL);
 	}
