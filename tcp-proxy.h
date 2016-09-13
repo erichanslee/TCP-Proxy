@@ -19,20 +19,22 @@ int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
     return maxfd;
 }
 
-void process_connection(int threadidx,  fd_set *readfds, fd_set *writefds, void *client_buf, void *server_buf){
+void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
     int i, size, kill_fd_flag;
     for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
         int client_fd = fdarray[i].client_fd;
         int server_fd = fdarray[i].server_fd;
+        void * client_buf = fdarray[i].client_buf;
+        void * server_buf = fdarray[i].server_buf;
         // TODO: Close fds when forward returns 1
         if (FD_ISSET(client_fd, readfds)) {
-            size = recv_buffer(client_fd, server_fd, client_buf);
+            size = buffer_recv(client_fd, server_fd, client_buf);
             // TODO: Fix kill_flag
             if(kill_fd_flag == 1)
                 prune_fds(client_fd, server_fd);
         }
         if (FD_ISSET(server_fd, readfds)) {
-            size = recv_buffer(server_fd, client_fd, server_buf);
+            size = buffer_recv(server_fd, client_fd, server_buf);
             if(kill_fd_flag == 1)
                 prune_fds(client_fd, server_fd);
         }
@@ -46,7 +48,7 @@ void process_connection(int threadidx,  fd_set *readfds, fd_set *writefds, void 
     }
 }
 
-int recv_buffer(int origin_fd, int destination_fd, void *buf){
+int buffer_recv(int origin_fd, int destination_fd, void *buf){
     int size = recv(origin_fd, buf, BUF_SIZE, 0);
     if(size == 0 ){
         close(origin_fd);
@@ -86,7 +88,7 @@ int sendall(int destination_fd, char *buf, int len)
 }
 // TODO: Implement Complete Buffering
 
-int start_proxy(int threadidx, void * client_buf, void * server_buf){
+int start_proxy(int threadidx){
     fd_set readfds;
     fd_set writefds;
     struct timeval tv;
@@ -99,32 +101,7 @@ int start_proxy(int threadidx, void * client_buf, void * server_buf){
         maxfd = build_fd(threadidx, &readfds, &writefds);
         /* select restarts every 5 seconds to check for new connections */
         select(maxfd, &readfds, &writefds, NULL, &tv);
-        //process_connection(threadidx, &readfds, &writefds, client_buf, server_buf);
-
-        for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
-            int client_fd = fdarray[i].client_fd;
-            int server_fd = fdarray[i].server_fd;
-            // TODO: Close fds when forward returns 1
-            if (FD_ISSET(client_fd, &readfds)) {
-                size = recv_buffer(client_fd, server_fd, client_buf);
-                // TODO: Fix kill_flag
-                if(kill_fd_flag == 1)
-                    prune_fds(client_fd, server_fd);
-            }
-            if (FD_ISSET(server_fd, &readfds)) {
-                size = recv_buffer(server_fd, client_fd, server_buf);
-                if(kill_fd_flag == 1)
-                    prune_fds(client_fd, server_fd);
-            }
-            if (FD_ISSET(client_fd, &readfds)) {
-                sendall(server_fd, client_buf, size);
-
-            }
-            if (FD_ISSET(server_fd, &writefds)) {
-                sendall(client_fd, server_buf, size);
-            }
-        }
-
+        process_connection(threadidx, &readfds, &writefds);
 	}
 }
 void Initstuff(){
@@ -152,14 +129,11 @@ void Initstuff(){
 // Function to pass into pthreads creation
 void * ThreadTask(void *thread_arg){
 	int threadidx = (int)thread_arg;
-    void *client_buf = malloc(BUF_SIZE);
-    void *server_buf = malloc(BUF_SIZE);
-
 
     printf("Thread %d Spawned and Waiting...\n", threadidx);
     pthread_mutex_lock(&mutexes[threadidx]);
     printf("Thread %d Woken Up!\n", threadidx);
-    start_proxy(threadidx, client_buf, server_buf);
+    start_proxy(threadidx);
 	pthread_mutex_unlock(&mutexes[threadidx]);
 
 }
