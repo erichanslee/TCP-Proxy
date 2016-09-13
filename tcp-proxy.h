@@ -1,7 +1,64 @@
 #include "header.h"
 #include <pthread.h>
 
+int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
+    int i, maxfd = 0;
+    for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM) {
+        int client_fd = fdarray[i].client_fd;
+        int server_fd = fdarray[i].server_fd;
+        if(client_fd != -1 && server_fd != -1) {
+            maxfd = max(client_fd, maxfd);
+            maxfd = max(server_fd, maxfd);
+            FD_SET(client_fd, readfds);
+            FD_SET(server_fd, readfds);
+            FD_SET(client_fd, writefds);
+            FD_SET(server_fd, writefds);
+        }
+    }
+    maxfd = maxfd + 1;
+    return maxfd;
+}
 
+void process_connection(int threadidx,  fd_set *readfds, fd_set *writefds, void *client_buf, void *server_buf){
+    int i, size, kill_fd_flag;
+    for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
+        int client_fd = fdarray[i].client_fd;
+        int server_fd = fdarray[i].server_fd;
+        // TODO: Close fds when forward returns 1
+        if (FD_ISSET(client_fd, readfds)) {
+            size = recv_buffer(client_fd, server_fd, client_buf);
+            // TODO: Fix kill_flag
+            if(kill_fd_flag == 1)
+                prune_fds(client_fd, server_fd);
+        }
+        if (FD_ISSET(server_fd, readfds)) {
+            size = recv_buffer(server_fd, client_fd, server_buf);
+            if(kill_fd_flag == 1)
+                prune_fds(client_fd, server_fd);
+        }
+        if (FD_ISSET(client_fd, readfds)) {
+            sendall(server_fd, client_buf, size);
+
+        }
+        if (FD_ISSET(server_fd, writefds)) {
+            sendall(client_fd, server_buf, size);
+        }
+    }
+}
+
+int recv_buffer(int origin_fd, int destination_fd, void *buf){
+    int size = recv(origin_fd, buf, BUF_SIZE, 0);
+    if(size == 0 ){
+        close(origin_fd);
+        close(destination_fd);
+    }
+    if(size < -1){
+        fprintf(stderr, "Receiving error %s\n", strerror(errno));
+        close(origin_fd);
+        close(destination_fd);
+    }
+    return size;
+}
 
 void prune_fds(int client_fd, int server_fd){
     int idx = findval_client(fdarray, MAX_CONN_HIGH_WATERMARK, client_fd);
@@ -11,8 +68,6 @@ void prune_fds(int client_fd, int server_fd){
     TOTAL_CONNECTIONS--;
     pthread_mutex_unlock(&tot_conn_mutex);
 }
-
-
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
 	... Changed for syntatic clarity and functionality*/
@@ -29,66 +84,44 @@ int sendall(int destination_fd, char *buf, int len)
 	}
 	return n==-1?-1:0;
 }
-
-
 // TODO: Implement Complete Buffering
-int forward(int origin_fd, int destination_fd, void *buf){
-    ssize_t size = 0;
-    size = recv(origin_fd, buf, BUF_SIZE, 0);
-    if(size < -1){
-        fprintf(stderr, "Receiving error %s\n", strerror(errno));
-        close(origin_fd);
-        close(destination_fd);
-    }
-    if(size == 0){
-        close(origin_fd);
-        close(destination_fd);
-        return 1;
-    }
-    else{
-        sendall(destination_fd, buf, size);
-    }
-	return 0;
-}
 
 int start_proxy(int threadidx, void * client_buf, void * server_buf){
-
     fd_set readfds;
+    fd_set writefds;
     struct timeval tv;
     while(1){
-        int i, kill_fd_flag, maxfd = 0;
+        int i, kill_fd_flag, size, maxfd = 0;
         FD_ZERO(&readfds);
+        FD_ZERO(&writefds);
         tv.tv_usec = 0;
         tv.tv_sec = 1;
-        for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM) {
-            int client_fd = fdarray[i].client_fd;
-            int server_fd = fdarray[i].server_fd;
-            if(client_fd != -1 && server_fd != -1) {
-                maxfd = max(client_fd, maxfd);
-                maxfd = max(server_fd, maxfd);
-                FD_SET(client_fd, &readfds);
-                FD_SET(server_fd, &readfds);
-            }
-        }
-
-        maxfd = maxfd + 1;
+        maxfd = build_fd(threadidx, &readfds, &writefds);
         /* select restarts every 5 seconds to check for new connections */
-        select(maxfd, &readfds, NULL, NULL, &tv);
+        select(maxfd, &readfds, &writefds, NULL, &tv);
+        //process_connection(threadidx, &readfds, &writefds, client_buf, server_buf);
 
         for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
             int client_fd = fdarray[i].client_fd;
             int server_fd = fdarray[i].server_fd;
             // TODO: Close fds when forward returns 1
             if (FD_ISSET(client_fd, &readfds)) {
-                kill_fd_flag = forward(client_fd, server_fd, client_buf);
+                size = recv_buffer(client_fd, server_fd, client_buf);
+                // TODO: Fix kill_flag
                 if(kill_fd_flag == 1)
                     prune_fds(client_fd, server_fd);
             }
-
             if (FD_ISSET(server_fd, &readfds)) {
-                kill_fd_flag = forward(server_fd, client_fd, server_buf);
+                size = recv_buffer(server_fd, client_fd, server_buf);
                 if(kill_fd_flag == 1)
                     prune_fds(client_fd, server_fd);
+            }
+            if (FD_ISSET(client_fd, &readfds)) {
+                sendall(server_fd, client_buf, size);
+
+            }
+            if (FD_ISSET(server_fd, &writefds)) {
+                sendall(client_fd, server_buf, size);
             }
         }
 
@@ -99,6 +132,10 @@ void Initstuff(){
 	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
 		fdarray[i].client_fd = -1;
 		fdarray[i].server_fd = -1;
+        fdarray[i].cbuf_pointer = 0;
+        fdarray[i].sbuf_pointer = 0;
+        fdarray[i].client_buf = malloc(BUF_SIZE);
+        fdarray[i].server_buf = malloc(BUF_SIZE);
 	}
 
     for (i = 0; i < MAX_THREAD_NUM; i++) {
