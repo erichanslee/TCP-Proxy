@@ -8,6 +8,85 @@
 #include "tcp-proxy.h"
 
 
+// __loop done by main thread
+void __loop(int proxy_fd)
+{
+    struct sockaddr_in client_addr;
+    socklen_t addr_size;
+    int client_fd, server_fd;
+    char client_hname[MAX_ADDR_NAME+1];
+    char server_hname[MAX_ADDR_NAME+1];
+    int idx = 0;
+    struct sockaddr_in copyRemote = copy_remote_addr(remote_addr);
+    Initstuff();
+    int threadcounter = -1;
+
+    while(1) {
+        if (TOTAL_CONNECTIONS < MAX_CONN_HIGH_WATERMARK) {
+            memset(&client_addr, 0, sizeof(struct sockaddr_in));
+            addr_size = sizeof(client_addr);
+            client_fd = accept(proxy_fd, (struct sockaddr *) &client_addr,
+                               &addr_size);
+            if (client_fd == -1) {
+                fprintf(stderr, "accept error %s\n", strerror(errno));
+                continue;
+            }
+
+            // For debugging purpose
+            if (getpeername(client_fd, (struct sockaddr *) &client_addr, &addr_size) < 0) {
+                fprintf(stderr, "getpeername error %s\n", strerror(errno));
+            }
+
+            strncpy(client_hname, inet_ntoa(client_addr.sin_addr), MAX_ADDR_NAME);
+            strncpy(server_hname, inet_ntoa(copyRemote.sin_addr), MAX_ADDR_NAME);
+
+            // TODO: Disable following printf before submission
+            printf("Connection proxied: %s:%d --> %s:%d\n",
+                   client_hname, ntohs(client_addr.sin_port),
+                   server_hname, ntohs(copyRemote.sin_port));
+
+            // Connect to the server
+            if ((server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+                fprintf(stderr, "socket error %s\n", strerror(errno));
+                close(client_fd);
+                continue;
+            }
+
+
+            if (connect(server_fd, (struct sockaddr *) &copyRemote,
+                        sizeof(struct sockaddr_in)) < 0) {
+                if (errno != EINPROGRESS) {
+                    fprintf(stderr, "connect error %s\n", strerror(errno));
+                    close(client_fd);
+                    close(server_fd);
+                    continue;
+                }
+            }
+
+            printf("Connection Made...\n");
+
+            idx = findval(fdarray, MAX_CONN_HIGH_WATERMARK, -1);
+            fdarray[idx].client_fd = client_fd;
+            fdarray[idx].server_fd = server_fd;
+
+            /* Update Optimization Counter */
+            if (MAX_CONNECTIONS < 256) MAX_CONNECTIONS++;
+
+            /* Update Total Connections */
+            pthread_mutex_lock(&tot_conn_mutex);
+            TOTAL_CONNECTIONS++;
+            if(TOTAL_CONNECTIONS == MAX_CONN_HIGH_WATERMARK) printf("Maximum Number of Connections Reached!\n");
+            pthread_mutex_unlock(&tot_conn_mutex);
+
+            /* Wake threads if necessary */
+            if (threadcounter < MAX_THREAD_NUM) {
+                threadcounter++;
+                pthread_mutex_unlock(&mutexes[threadcounter]);
+            }
+
+        }
+    }
+}
 
 int main(int argc, char **argv)
 {
