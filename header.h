@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include "list.h"
 
+
 #ifndef max
     #define max(a,b) ((a) > (b) ? (a) : (b))
 #endif
@@ -62,9 +63,10 @@ struct connection{
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~~ PROXY FUNCTIONS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-int sendall(int destination_fd, char *buf, int len);
-int forward(int origin_fd, int destination_fd, void *buf);
-//int start_proxy(int client_fd, int server_fd);
+
+
+int sendall(int destination_fd, struct buffer conn_buffer, int len);
+int start_proxy(int threadidx);
 void * ThreadTask(void *thread_arg);
 void __loop(int proxy_fd);
 

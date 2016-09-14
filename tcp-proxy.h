@@ -19,33 +19,6 @@ int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
     return maxfd;
 }
 
-void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
-    int i, size = -1;
-    for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
-        int client_fd = fdarray[i].client_fd;
-        int server_fd = fdarray[i].server_fd;
-        struct buffer client_buf = fdarray[i].client_buf;
-        struct buffer server_buf = fdarray[i].server_buf;
-        if (FD_ISSET(client_fd, readfds)) {
-            size = buffer_recv(client_fd, server_fd, client_buf);
-            if(size <= 0)
-                prune_fds(client_fd, server_fd);
-        }
-        if (FD_ISSET(server_fd, readfds)) {
-            size = buffer_recv(server_fd, client_fd, server_buf);
-            if(size <= 0)
-                prune_fds(client_fd, server_fd);
-        }
-        if (FD_ISSET(client_fd, readfds)) {
-            sendall(server_fd, client_buf.buf, size);
-
-        }
-        if (FD_ISSET(server_fd, writefds)) {
-            sendall(client_fd, server_buf.buf, size);
-        }
-    }
-}
-
 int buffer_recv(int origin_fd, int destination_fd, struct buffer buf){
     int size = recv(origin_fd, buf.buf, BUF_SIZE, 0);
     if(size == 0 ){
@@ -71,8 +44,9 @@ void prune_fds(int client_fd, int server_fd){
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
 	... Changed for syntatic clarity and functionality*/
-int sendall(int destination_fd, char *buf, int len)
+int sendall(int destination_fd, struct buffer conn_buffer, int len)
 {
+    void * buf = conn_buffer.buf;
 	int total = 0;
 	int bytesleft = len;
 	int n;
@@ -83,6 +57,33 @@ int sendall(int destination_fd, char *buf, int len)
 		bytesleft -= n;
 	}
 	return n==-1?-1:0;
+}
+
+void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
+    int i, size = -1;
+    for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
+        int client_fd = fdarray[i].client_fd;
+        int server_fd = fdarray[i].server_fd;
+        struct buffer client_buf = fdarray[i].client_buf;
+        struct buffer server_buf = fdarray[i].server_buf;
+        if (FD_ISSET(client_fd, readfds)) {
+            size = buffer_recv(client_fd, server_fd, client_buf);
+            if(size <= 0)
+                prune_fds(client_fd, server_fd);
+        }
+        if (FD_ISSET(server_fd, readfds)) {
+            size = buffer_recv(server_fd, client_fd, server_buf);
+            if(size <= 0)
+                prune_fds(client_fd, server_fd);
+        }
+        if (FD_ISSET(client_fd, readfds)) {
+            sendall(server_fd, client_buf, size);
+
+        }
+        if (FD_ISSET(server_fd, writefds)) {
+            sendall(client_fd, server_buf, size);
+        }
+    }
 }
 // TODO: Implement Complete Buffering
 
