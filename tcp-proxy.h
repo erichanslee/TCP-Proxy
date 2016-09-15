@@ -20,6 +20,7 @@ int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
 }
 
 int buffer_recv(int origin_fd, int destination_fd, struct buffer buf){
+
     int size = recv(origin_fd, buf.buf, BUF_SIZE, 0);
     if(size == 0 ){
         close(origin_fd);
@@ -40,6 +41,7 @@ void prune_fds(int client_fd, int server_fd){
     pthread_mutex_lock(&tot_conn_mutex);
     TOTAL_CONNECTIONS--;
     pthread_mutex_unlock(&tot_conn_mutex);
+    printf("Connection Finished!\n");
 }
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
@@ -92,6 +94,13 @@ int start_proxy(int threadidx){
     fd_set writefds;
     struct timeval tv;
     while(1){
+        pthread_mutex_lock(&mutexes[threadidx]);
+        if(TOTAL_CONNECTIONS < threadidx + 1){
+            //TODO: block on a condition signal if no work
+            pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
+            printf("Thread %d Woken Up!\n", threadidx);
+        }
+        pthread_mutex_unlock(&mutexes[threadidx]);
         int maxfd = 0;
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
@@ -106,23 +115,22 @@ int start_proxy(int threadidx){
 void Initstuff(){
 	int i;
 	for(i = 0; i < MAX_CONN_HIGH_WATERMARK; i++){
-
 		fdarray[i].client_fd = -1;
 		fdarray[i].server_fd = -1;
         fdarray[i].client_buf.buf = malloc(BUF_SIZE);
         fdarray[i].server_buf.buf = malloc(BUF_SIZE);
         fdarray[i].client_buf.buf_pointer = 0;
         fdarray[i].server_buf.buf_pointer = 0;
-
 	}
+
     for (i = 0; i < MAX_THREAD_NUM; i++) {
         pthread_mutex_init(&mutexes[i], NULL);
-        pthread_mutex_lock(&mutexes[i]);
+        pthread_cond_init(&cond_isempty[i], NULL);
     }
+
     for(i = 0; i < MAX_THREAD_NUM; i++){
         pthread_create(&threads[i], NULL, ThreadTask, (void *)i);
     }
-
 }
 
 // Function to pass into pthreads creation
@@ -130,9 +138,5 @@ void * ThreadTask(void *thread_arg){
 	int threadidx = (int)thread_arg;
 
     printf("Thread %d Spawned and Waiting...\n", threadidx);
-    pthread_mutex_lock(&mutexes[threadidx]);
-    printf("Thread %d Woken Up!\n", threadidx);
     start_proxy(threadidx);
-	pthread_mutex_unlock(&mutexes[threadidx]);
-
 }

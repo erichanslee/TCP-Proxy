@@ -79,9 +79,8 @@ void __loop(int proxy_fd)
             pthread_mutex_unlock(&tot_conn_mutex);
 
             /* Wake threads if necessary */
-            if (threadcounter < MAX_THREAD_NUM) {
-                threadcounter++;
-                pthread_mutex_unlock(&mutexes[threadcounter]);
+            if (TOTAL_CONNECTIONS < MAX_THREAD_NUM) {
+                pthread_cond_signal(&cond_isempty[TOTAL_CONNECTIONS-1]);
             }
 
         }
