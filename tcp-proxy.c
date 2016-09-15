@@ -19,8 +19,6 @@ void __loop(int proxy_fd)
     int idx = 0;
     struct sockaddr_in copyRemote = copy_remote_addr(remote_addr);
     Initstuff();
-    int threadcounter = -1;
-
     while(1) {
         if (TOTAL_CONNECTIONS < MAX_CONN_HIGH_WATERMARK) {
             memset(&client_addr, 0, sizeof(struct sockaddr_in));
@@ -79,7 +77,8 @@ void __loop(int proxy_fd)
             pthread_mutex_unlock(&tot_conn_mutex);
 
             /* Wake threads if necessary */
-            if (TOTAL_CONNECTIONS < MAX_THREAD_NUM) {
+            // TODO: DEAL WITH THIS CONTROL
+            if (TOTAL_CONNECTIONS-1 < MAX_THREAD_NUM) {
                 pthread_cond_signal(&cond_isempty[TOTAL_CONNECTIONS-1]);
             }
 

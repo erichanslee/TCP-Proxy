@@ -93,10 +93,11 @@ int start_proxy(int threadidx){
     fd_set readfds;
     fd_set writefds;
     struct timeval tv;
+    int MyConnectionCounter = 0;
     while(1){
         pthread_mutex_lock(&mutexes[threadidx]);
         if(TOTAL_CONNECTIONS < threadidx + 1){
-            //TODO: block on a condition signal if no work
+            printf("No Work, Thread going to sleep.\n");
             pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
             printf("Thread %d Woken Up!\n", threadidx);
         }
@@ -106,7 +107,8 @@ int start_proxy(int threadidx){
         FD_ZERO(&writefds);
         tv.tv_usec = 0;
         tv.tv_sec = 1;
-        maxfd = build_fd(threadidx, &readfds, &writefds);
+        /* Rebuilt Connection Set if Necessary */
+
         /* select restarts every 5 seconds to check for new connections */
         select(maxfd, &readfds, &writefds, NULL, &tv);
         process_connection(threadidx, &readfds, &writefds);
