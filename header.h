@@ -34,7 +34,7 @@
 #define MAX_CONN_LOW_WATERMARK	(MAX_CONN_HIGH_WATERMARK - 1)
 
 #define MAX_THREAD_NUM	4
-#define BUF_SIZE 4096
+#define BUF_SIZE (8*ONE_K)
 
  struct buffer{
      void *buf;

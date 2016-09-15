@@ -1,6 +1,10 @@
 #include "header.h"
 #include <pthread.h>
 
+int buf_isfull(int fd){
+    return 0;
+}
+
 int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
     int i, maxfd = 0;
     for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM) {
@@ -31,7 +35,8 @@ void prune_fds(int client_fd, int server_fd){
 
 int buffer_recv(int origin_fd, int destination_fd, struct buffer *conn_buf){
 
-    int size = recv(origin_fd, conn_buf->buf, BUF_SIZE, 0);
+    int size = recv(origin_fd, conn_buf->buf + conn_buf->buf_pointer, BUF_SIZE - conn_buf->buf_pointer, 0);
+    conn_buf->buf_pointer += size;
     if(size == 0 ){
         close(origin_fd);
         close(destination_fd);
@@ -68,22 +73,22 @@ void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
         int server_fd = fdarray[i].server_fd;
         struct buffer *client_buf = &fdarray[i].client_buf;
         struct buffer *server_buf = &fdarray[i].server_buf;
-        if (FD_ISSET(client_fd, readfds)) {
+        if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_fd)) {
             size = buffer_recv(client_fd, server_fd, client_buf);
             if(size <= 0)
                 prune_fds(client_fd, server_fd);
         }
-        if (FD_ISSET(server_fd, readfds)) {
+        if (FD_ISSET(server_fd, readfds) && !buf_isfull(server_fd)) {
             size = buffer_recv(server_fd, client_fd, server_buf);
             if(size <= 0)
                 prune_fds(client_fd, server_fd);
         }
-        if (FD_ISSET(client_fd, readfds)) {
-            sendall(server_fd, client_buf, size);
+        if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_fd)) {
+            sendall(server_fd, client_buf, client_buf->buf_pointer);
 
         }
-        if (FD_ISSET(server_fd, writefds)) {
-            sendall(client_fd, server_buf, size);
+        if (FD_ISSET(server_fd, writefds) && !buf_isfull(server_fd)) {
+            sendall(client_fd, server_buf, server_buf->buf_pointer);
         }
     }
 }
