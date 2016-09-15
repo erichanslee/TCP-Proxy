@@ -66,7 +66,7 @@ struct connection{
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 
-int sendall(int destination_fd, struct buffer conn_buffer, int len);
+//int sendall(int destination_fd, struct buffer conn_buffer, int len);
 int start_proxy(int threadidx);
 void * ThreadTask(void *thread_arg);
 void __loop(int proxy_fd);

@@ -37,7 +37,7 @@ int main (int argc, char *argv[])
 	pthread_t threads[NUM_THREADS];
 
    /* Initialize mutex and condition variable objects */
-	for(int i = 0; i < NUM_THREADS; i++){
+	for(i = 0; i < NUM_THREADS; i++){
 		pthread_mutex_init(&mutexes[i], NULL);
 		pthread_mutex_lock(&mutexes[i]);
 		pthread_cond_init (&count_threshold_cv[i], NULL);
