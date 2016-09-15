@@ -24,7 +24,7 @@ void prune_fds(int client_fd, int server_fd){
     fdarray[idx].client_fd = -1;
     fdarray[idx].server_fd = -1;
     pthread_mutex_lock(&tot_conn_mutex);
-    TOTAL_CONNECTIONS--;
+    CUR_NUM_CONNECTIONS--;
     pthread_mutex_unlock(&tot_conn_mutex);
     printf("Connection Finished!\n");
 }
@@ -92,26 +92,39 @@ void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
 int start_proxy(int threadidx){
     fd_set readfds;
     fd_set writefds;
+    fd_set readfds_cpy;
+    fd_set writefds_cpy;
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
+    FD_ZERO(&readfds_cpy);
+    FD_ZERO(&writefds_cpy);
+    int maxfd = build_fd(threadidx, &readfds, &writefds);
     struct timeval tv;
-    int MyConnectionCounter = 0;
+    int MyConnectionCounter = -1;
     while(1){
         pthread_mutex_lock(&mutexes[threadidx]);
-        if(TOTAL_CONNECTIONS < threadidx + 1){
+        if(CUR_NUM_CONNECTIONS < threadidx + 1){
             printf("No Work, Thread going to sleep.\n");
             pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
             printf("Thread %d Woken Up!\n", threadidx);
         }
         pthread_mutex_unlock(&mutexes[threadidx]);
-        int maxfd = 0;
-        FD_ZERO(&readfds);
-        FD_ZERO(&writefds);
+
         tv.tv_usec = 0;
         tv.tv_sec = 1;
-        /* Rebuilt Connection Set if Necessary */
 
-        /* select restarts every 5 seconds to check for new connections */
-        select(maxfd, &readfds, &writefds, NULL, &tv);
-        process_connection(threadidx, &readfds, &writefds);
+        /* Rebuilt Connection Set if # Cons has changed */
+        if(MyConnectionCounter != NET_CONNECTIONS_HANDLED){
+            maxfd = build_fd(threadidx, &readfds, &writefds);
+            MyConnectionCounter = NET_CONNECTIONS_HANDLED;
+        }
+
+        /* Copy fds to prevent rebuilding every loop */
+        memcpy(&readfds_cpy, &readfds, sizeof(readfds_cpy));
+        memcpy(&writefds_cpy, &writefds, sizeof(writefds_cpy));
+        /* select restarts every second to check for new connections */
+        select(maxfd, &readfds_cpy, &writefds_cpy, NULL, &tv);
+        process_connection(threadidx, &readfds_cpy, &writefds_cpy);
 	}
 }
 void Initstuff(){

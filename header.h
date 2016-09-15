@@ -56,8 +56,9 @@ struct connection{
  pthread_mutex_t mutexes[MAX_THREAD_NUM];
  pthread_cond_t cond_isempty[MAX_THREAD_NUM];
  pthread_t threads[MAX_THREAD_NUM];
- pthread_mutex_t tot_conn_mutex; /* Mutex for TOTAL_CONNECTIONS */
- int TOTAL_CONNECTIONS = 0; /* Tracks total number # of connections */
+ pthread_mutex_t tot_conn_mutex; /* Mutex for CUR_NUM_CONNECTIONS */
+ int CUR_NUM_CONNECTIONS = 0; /* Tracks total number # of connections */
+ int NET_CONNECTIONS_HANDLED = 0; /* Counts net connections handled */
  int MAX_CONNECTIONS = 0; /* Optimization variable to representing upper bound on # of connections */
 
 
