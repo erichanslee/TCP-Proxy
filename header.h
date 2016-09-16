@@ -115,3 +115,12 @@ void __loop(int proxy_fd);
      struct sockaddr_in copy;
      memcpy(&copy, &remote_addr, sizeof(copy));
  }
+
+ int buf_isfull(struct buffer * buf){
+     if(buf->buf_pointer < BUF_SIZE_LBOUND){
+         return 0;
+     }
+     else{
+         return 1;
+     }
+ }

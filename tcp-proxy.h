@@ -1,14 +1,7 @@
 #include "header.h"
 #include <pthread.h>
 
-int buf_isfull(struct buffer * buf){
-    if(buf->buf_pointer < BUF_SIZE_LBOUND){
-        return 0;
-    }
-    else{
-        return 1;
-    }
-}
+
 
 int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
     int i, maxfd = 0;
