@@ -35,6 +35,7 @@
 
 #define MAX_THREAD_NUM	4
 #define BUF_SIZE (8*ONE_K)
+#define BUF_SIZE_LBOUND (6*ONE_K)
 
  struct buffer{
      void *buf;

@@ -1,8 +1,13 @@
 #include "header.h"
 #include <pthread.h>
 
-int buf_isfull(int fd){
-    return 0;
+int buf_isfull(struct buffer * buf){
+    if(buf->buf_pointer < BUF_SIZE_LBOUND){
+        return 0;
+    }
+    else{
+        return 1;
+    }
 }
 
 int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
@@ -63,31 +68,31 @@ int sendall(int destination_fd, struct buffer *conn_buffer, int len)
 		total += n;
 		bytesleft -= n;
 	}
+    conn_buffer->buf_pointer = 0;
 	return n==-1?-1:0;
 }
 
 void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
-    int i, size = -1;
+    int i, size;
     for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
         int client_fd = fdarray[i].client_fd;
         int server_fd = fdarray[i].server_fd;
         struct buffer *client_buf = &fdarray[i].client_buf;
         struct buffer *server_buf = &fdarray[i].server_buf;
-        if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_fd)) {
+        if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_buf)) {
             size = buffer_recv(client_fd, server_fd, client_buf);
             if(size <= 0)
                 prune_fds(client_fd, server_fd);
         }
-        if (FD_ISSET(server_fd, readfds) && !buf_isfull(server_fd)) {
+        if (FD_ISSET(server_fd, readfds) && !buf_isfull(server_buf)) {
             size = buffer_recv(server_fd, client_fd, server_buf);
             if(size <= 0)
                 prune_fds(client_fd, server_fd);
         }
-        if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_fd)) {
+        if (FD_ISSET(client_fd, writefds)) {
             sendall(server_fd, client_buf, client_buf->buf_pointer);
-
         }
-        if (FD_ISSET(server_fd, writefds) && !buf_isfull(server_fd)) {
+        if (FD_ISSET(server_fd, writefds)) {
             sendall(client_fd, server_buf, server_buf->buf_pointer);
         }
     }
@@ -107,13 +112,11 @@ int start_proxy(int threadidx){
     struct timeval tv;
     int MyConnectionCounter = -1;
     while(1){
-        pthread_mutex_lock(&mutexes[threadidx]);
         if(CUR_NUM_CONNECTIONS < threadidx + 1){
             printf("No Work, Thread going to sleep.\n");
             pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
             printf("Thread %d Woken Up!\n", threadidx);
         }
-        pthread_mutex_unlock(&mutexes[threadidx]);
 
         tv.tv_usec = 0;
         tv.tv_sec = 1;
