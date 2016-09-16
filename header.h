@@ -1,4 +1,5 @@
  // TCP Proxy header.
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,10 +32,12 @@
 #define MAX_THREAD_NUM	4
 #define BUF_SIZE (12*ONE_K)
 #define NUM_SENDS 4
+#define TIMEOUT 10
 
  struct buffer{
      void *buf;
      int buf_pointer;
+     float time_since_last_send;
  };
 
 struct connection{

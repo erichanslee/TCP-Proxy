@@ -8,12 +8,14 @@ int build_fd(int threadidx, fd_set *readfds, fd_set *writefds){
     for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM) {
         int client_fd = fdarray[i].client_fd;
         int server_fd = fdarray[i].server_fd;
-        if(client_fd != -1 && server_fd != -1) {
+        if(client_fd != -1) {
             maxfd = max(client_fd, maxfd);
-            maxfd = max(server_fd, maxfd);
             FD_SET(client_fd, readfds);
-            FD_SET(server_fd, readfds);
             FD_SET(client_fd, writefds);
+        }
+        if(server_fd != -1) {
+            maxfd = max(server_fd, maxfd);
+            FD_SET(server_fd, readfds);
             FD_SET(server_fd, writefds);
         }
     }
@@ -64,11 +66,14 @@ int sendall(int destination_fd, struct buffer *conn_buffer, int len)
     /* shift buffer since my circular array implementation wasn't working */
     memcpy(conn_buffer->buf, conn_buffer->buf + total, bytesleft);
     conn_buffer->buf_pointer = bytesleft;
-	return n==-1?-1:0;
+    conn_buffer->time_since_last_send = 0;
+	return 0;
 }
 
 void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
-    int i, size;
+    clock_t start, end;
+    start = clock();
+    int i, size, flag;
     for(i = threadidx; i < MAX_CONNECTIONS; i += MAX_THREAD_NUM){
         int client_fd = fdarray[i].client_fd;
         int server_fd = fdarray[i].server_fd;
@@ -76,19 +81,31 @@ void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
         struct buffer *server_buf = &fdarray[i].server_buf;
         if (FD_ISSET(client_fd, readfds) && !buf_isfull(client_buf)) {
             size = buffer_recv(client_fd, server_fd, client_buf);
-            if(size <= 0)
+
+            /* Check for timeout */
+            end = clock();
+            client_buf->time_since_last_send += (float)(end - start) / CLOCKS_PER_SEC;
+
+            /* Prune if necessary */
+            if((size <= 0) || (client_buf->time_since_last_send > TIMEOUT))
                 prune_fds(client_fd, server_fd);
         }
         if (FD_ISSET(server_fd, readfds) && !buf_isfull(server_buf)) {
             size = buffer_recv(server_fd, client_fd, server_buf);
-            if(size <= 0)
+            end = clock();
+            server_buf->time_since_last_send += (float)(end - start) / CLOCKS_PER_SEC;
+            if((size <= 0) || (client_buf->time_since_last_send > TIMEOUT))
                 prune_fds(client_fd, server_fd);
         }
         if (FD_ISSET(client_fd, writefds)) {
-            sendall(server_fd, client_buf, client_buf->buf_pointer);
+            flag = sendall(server_fd, client_buf, client_buf->buf_pointer);
+            if(flag == -1)
+                prune_fds(client_fd, server_fd);
         }
         if (FD_ISSET(server_fd, writefds)) {
-            sendall(client_fd, server_buf, server_buf->buf_pointer);
+            flag = sendall(client_fd, server_buf, server_buf->buf_pointer);
+            if(flag == -1)
+                prune_fds(client_fd, server_fd);
         }
     }
 }
@@ -97,38 +114,27 @@ void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
 int start_proxy(int threadidx){
     fd_set readfds;
     fd_set writefds;
-    fd_set readfds_cpy;
-    fd_set writefds_cpy;
     FD_ZERO(&readfds);
     FD_ZERO(&writefds);
-    FD_ZERO(&readfds_cpy);
-    FD_ZERO(&writefds_cpy);
     int maxfd = build_fd(threadidx, &readfds, &writefds);
     struct timeval tv;
+    tv.tv_usec = 0;
+    tv.tv_sec = 1;
     int MyConnectionCounter = -1;
     while(1){
+        /* Block if no work */
         if(CUR_NUM_CONNECTIONS < threadidx + 1){
             printf("No Work, Thread %d going to sleep.\n", threadidx);
             pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
             printf("Thread %d Woken Up!\n", threadidx);
         }
 
-        tv.tv_usec = 0;
-        tv.tv_sec = 1;
-
-        /* Rebuilt Connection Set if # Cons has changed TODO: LOGIC DOESNT WORK
-        if(MyConnectionCounter != NET_CONNECTIONS_HANDLED){
-            maxfd = build_fd(threadidx, &readfds, &writefds);
-            MyConnectionCounter = NET_CONNECTIONS_HANDLED;
-        } */
-        /* Yes I know it's expensive to rebuilt the set */
+        /* Yes, I know it's expensive to rebuild it every iteration */
         maxfd = build_fd(threadidx, &readfds, &writefds);
-        /* Copy fds to prevent rebuilding every loop */
-        memcpy(&readfds_cpy, &readfds, sizeof(readfds_cpy));
-        memcpy(&writefds_cpy, &writefds, sizeof(writefds_cpy));
+
         /* select restarts every second to check for new connections */
-        select(maxfd, &readfds_cpy, &writefds_cpy, NULL, &tv);
-        process_connection(threadidx, &readfds_cpy, &writefds_cpy);
+        select(maxfd, &readfds, &writefds, NULL, &tv);
+        process_connection(threadidx, &readfds, &writefds);
 	}
 }
 void Initstuff(){
@@ -140,6 +146,8 @@ void Initstuff(){
         fdarray[i].server_buf.buf = malloc(BUF_SIZE);
         fdarray[i].client_buf.buf_pointer = 0;
         fdarray[i].server_buf.buf_pointer = 0;
+        fdarray[i].client_buf.time_since_last_send = 0;
+        fdarray[i].server_buf.time_since_last_send = 0;
 	}
 
     for (i = 0; i < MAX_THREAD_NUM; i++) {
