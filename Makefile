@@ -1,4 +1,4 @@
-all: tcp-proxy tests
+all: tcp-proxy
 
 CFLAGS = -Wall -g -O2 
 LFLAGS = -pthread
@@ -8,9 +8,6 @@ DIST_FILE = tcp-proxy.tar.gz
 
 tcp-proxy: tcp-proxy.c
 	$(CC) $(LFLAGS) -o $@ $^ 
-
-tests: tests.c
-	$(CC) $(LFLAGS) -o $@ $^
 
 dist: clean
 	touch $(DIST_FILE)

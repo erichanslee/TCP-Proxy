@@ -45,80 +45,44 @@ struct connection{
 	int server_fd;
     struct buffer server_buf;
     struct buffer client_buf;
+    int client_recv_signal;
+    int server_recv_signal;
 };
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~ GLOBAL VARIABLES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
- struct sockaddr_in remote_addr; /* The address of the target server */
- struct connection fdarray[MAX_CONN_HIGH_WATERMARK]; /* array of file descriptors */
- pthread_mutex_t mutexes[MAX_THREAD_NUM];
- pthread_cond_t cond_isempty[MAX_THREAD_NUM];
- pthread_t threads[MAX_THREAD_NUM];
- pthread_mutex_t tot_conn_mutex; /* Mutex for CUR_NUM_CONNECTIONS */
- int CUR_NUM_CONNECTIONS = 0; /* Tracks total number # of connections */
- int NET_CONNECTIONS_HANDLED = 0; /* Counts net connections handled */
- int MAX_CONNECTIONS = 0; /* Optimization variable to representing upper bound on # of connections */
-
+    struct sockaddr_in remote_addr; /* The address of the target server */
+    struct connection fdarray[MAX_CONN_HIGH_WATERMARK]; /* array of file descriptors */
+    pthread_mutex_t mutexes[MAX_THREAD_NUM];
+    pthread_cond_t cond_isempty[MAX_THREAD_NUM];
+    pthread_t threads[MAX_THREAD_NUM];
+    pthread_mutex_t tot_conn_mutex; /* Mutex for CUR_NUM_CONNECTIONS */
+    int CUR_NUM_CONNECTIONS = 0; /* Tracks total number # of connections */
+    int NET_CONNECTIONS_HANDLED = 0; /* Counts net connections handled */
+    int MAX_CONNECTIONS = 0; /* Optimization variable to representing upper bound on # of connections */
 
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~~ PROXY FUNCTIONS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-
-//int sendall(int destination_fd, struct buffer conn_buffer, int len);
-int start_proxy(int threadidx);
-void * ThreadTask(void *thread_arg);
-void __loop(int proxy_fd);
-
-
+    int sendall(int destination_fd, struct buffer *conn_buffer, int len);
+    int start_proxy(int threadidx);
+    void * ThreadTask(void *thread_arg);
+    void __loop(int proxy_fd);
+    int build_fd(int threadidx, fd_set *readfds, fd_set *writefds);
+    void prune_fds(int idx);
+    int buffer_recv(int origin_fd, int destination_fd, struct buffer *conn_buf);
+    void check_connection(int size, clock_t start, int idx, struct buffer *buf, int origin_fd, int destination_fd);
+    void process_connection(int threadidx, fd_set *readfds, fd_set *writefds);
+    int start_proxy(int threadidx);
+    void Initstuff();
 
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~ HELPER FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
  /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 /* Searches array for first instance of val and returns its idx. Otherwise,  returns size + 1 */
- /* Note: Yes, there is some redundancy but I'd rather have them readable then have harder to understand code */
- int findval(struct connection * array, int size, int val){
-     int i;
-     for(i = 0; i < size; i++){
-         if(array[i].client_fd == val && array[i].server_fd == val){
-             return i;
-         }
-     }
-     return size + 1;
- }
-
- int findval_server(struct connection * array, int size, int val){
-     int i;
-     for(i = 0; i < size; i++){
-         if(array[i].server_fd == val){
-             return i;
-         }
-     }
-     return size + 1;
- }
-
- int findval_client(struct connection * array, int size, int val){
-     int i;
-     for(i = 0; i < size; i++){
-         if(array[i].client_fd == val){
-             return i;
-         }
-     }
-     return size + 1;
- }
-
- struct sockaddr_in copy_remote_addr(struct sockaddr_in remote_addr){
-     struct sockaddr_in copy;
-     memcpy(&copy, &remote_addr, sizeof(copy));
- }
-
- int buf_isfull(struct buffer * buf){
-     if(buf->buf_pointer < MAX_CONN_BACKLOG){
-         return 0;
-     }
-     else{
-         return 1;
-     }
- }
+    int findval(struct connection * array, int size, int val);
+    struct sockaddr_in copy_remote_addr(struct sockaddr_in remote_addr);
+    int buf_isfull(struct buffer * buf);
