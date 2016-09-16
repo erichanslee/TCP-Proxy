@@ -48,20 +48,22 @@ int buffer_recv(int origin_fd, int destination_fd, struct buffer *conn_buf){
 }
 
 /* sendall partially taken from Beej's Guide to Network Programming to handle partial sends
-	... Changed for syntatic clarity and functionality*/
+ modified to loop NUM_SEND times instead of while looping in case sending is too slow*/
 int sendall(int destination_fd, struct buffer *conn_buffer, int len)
 {
     void * buf = conn_buffer->buf;
 	int total = 0;
 	int bytesleft = len;
-	int n;
-	while(total < len) {
+	int n, i;
+	for(i = 0; i < NUM_SENDS; i ++) {
 		n = send(destination_fd, buf+total, bytesleft, 0);
 		if (n == -1) { break; }
 		total += n;
 		bytesleft -= n;
 	}
-    conn_buffer->buf_pointer = 0;
+    /* shift buffer since my circular array implementation wasn't working */
+    memcpy(conn_buffer->buf, conn_buffer->buf + total, bytesleft);
+    conn_buffer->buf_pointer = bytesleft;
 	return n==-1?-1:0;
 }
 
@@ -90,7 +92,7 @@ void process_connection(int threadidx, fd_set *readfds, fd_set *writefds){
         }
     }
 }
-// TODO: Implement Complete Buffering
+
 
 int start_proxy(int threadidx){
     fd_set readfds;
@@ -106,7 +108,7 @@ int start_proxy(int threadidx){
     int MyConnectionCounter = -1;
     while(1){
         if(CUR_NUM_CONNECTIONS < threadidx + 1){
-            printf("No Work, Thread going to sleep.\n");
+            printf("No Work, Thread %d going to sleep.\n", threadidx);
             pthread_cond_wait(&cond_isempty[threadidx], &mutexes[threadidx]);
             printf("Thread %d Woken Up!\n", threadidx);
         }
@@ -114,12 +116,13 @@ int start_proxy(int threadidx){
         tv.tv_usec = 0;
         tv.tv_sec = 1;
 
-        /* Rebuilt Connection Set if # Cons has changed */
+        /* Rebuilt Connection Set if # Cons has changed TODO: LOGIC DOESNT WORK
         if(MyConnectionCounter != NET_CONNECTIONS_HANDLED){
             maxfd = build_fd(threadidx, &readfds, &writefds);
             MyConnectionCounter = NET_CONNECTIONS_HANDLED;
-        }
-
+        } */
+        /* Yes I know it's expensive to rebuilt the set */
+        maxfd = build_fd(threadidx, &readfds, &writefds);
         /* Copy fds to prevent rebuilding every loop */
         memcpy(&readfds_cpy, &readfds, sizeof(readfds_cpy));
         memcpy(&writefds_cpy, &writefds, sizeof(writefds_cpy));
